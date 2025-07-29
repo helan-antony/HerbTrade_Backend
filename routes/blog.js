@@ -2,7 +2,6 @@ const express = require('express');
 const Blog = require('../models/Blog');
 const router = express.Router();
 
-// Get all blog posts
 router.get('/', async (req, res) => {
   try {
     const posts = await Blog.find().sort({ createdAt: -1 });
@@ -12,7 +11,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Create a new blog post
 router.post('/', async (req, res) => {
   const { title, content, author } = req.body;
   if (!title || !content || !author) {

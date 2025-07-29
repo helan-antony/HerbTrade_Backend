@@ -5,7 +5,12 @@ const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   phone: String,
   password: { type: String, required: true },
-  role: { type: String, enum: ['user', 'seller', 'hospital', 'admin'], default: 'user' },
+  profilePic: { type: String, default: '' },
+  externalLogin: { type: String, default: '' },
+  role: { type: String, enum: ['user', 'seller', 'hospital', 'admin', 'employee', 'manager', 'supervisor'], default: 'user' },
+  department: { type: String, default: '' },
+  isActive: { type: Boolean, default: true },
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   createdAt: { type: Date, default: Date.now }
 });
 

@@ -1,0 +1,31 @@
+const jwt = require('jsonwebtoken');
+const User = require('../models/User');
+const Seller = require('../models/Seller');
+
+module.exports = async (req, res, next) => {
+  const token = req.header('Authorization')?.replace('Bearer ', '');
+  
+  if (!token) {
+    return res.status(401).json({ error: 'No token, authorization denied' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, 'your-secret-key');
+    
+    let user;
+    if (decoded.collection === 'sellers') {
+      user = await Seller.findById(decoded.id).select('-password');
+    } else {
+      user = await User.findById(decoded.id).select('-password');
+    }
+    
+    if (!user) {
+      return res.status(401).json({ error: 'Token is not valid' });
+    }
+    
+    req.user = user;
+    next();
+  } catch (err) {
+    res.status(401).json({ error: 'Token is not valid' });
+  }
+};
