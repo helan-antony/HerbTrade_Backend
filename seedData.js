@@ -49,7 +49,7 @@ const sampleProducts = [
     name: 'Organic Turmeric Powder',
     description: 'High-curcumin organic turmeric powder with anti-inflammatory properties.',
     price: 249,
-    image: '/assets/turmeric.png',
+    image: '/assets/organic turmeric.png',
     category: 'Anti-inflammatory',
     uses: ['Anti-inflammatory', 'Joint health', 'Digestive health', 'Wound healing'],
     quality: 'Organic',

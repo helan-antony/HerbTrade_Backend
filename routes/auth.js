@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Seller = require('../models/Seller');
+const auth = require('../middleware/auth');
 const router = express.Router();
 
 router.post('/login', async (req, res) => {
@@ -125,4 +126,30 @@ router.patch('/profile', async (req, res) => {
   }
 });
 
+// Get user profile
+router.get('/profile', auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('-password');
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      user: user
+    });
+  } catch (error) {
+    console.error('Get profile error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching profile'
+    });
+  }
+});
+
 module.exports = router; 
+
+
