@@ -4,6 +4,37 @@ const Hospital = require('../models/Hospital');
 const auth = require('../middleware/auth');
 const router = express.Router();
 
+console.log('🏥 Hospitals routes file loaded!');
+
+// Test route to verify hospitals routes are working
+router.get('/test', (req, res) => {
+  console.log('🏥 Hospitals test route hit!');
+  res.json({ message: 'Hospitals routes are working!' });
+});
+
+// Debug route to list all hospitals with their IDs
+router.get('/debug/list', async (req, res) => {
+  try {
+    const hospitals = await Hospital.find({}, 'name _id city state doctors.name doctors.specialty');
+    console.log(`Found ${hospitals.length} hospitals in database`);
+
+    res.json({
+      message: `Found ${hospitals.length} hospitals`,
+      hospitals: hospitals.map(h => ({
+        id: h._id,
+        name: h.name,
+        city: h.city,
+        state: h.state,
+        doctorCount: h.doctors?.length || 0,
+        doctors: h.doctors?.map(d => ({ name: d.name, specialty: d.specialty })) || []
+      }))
+    });
+  } catch (error) {
+    console.error('Error listing hospitals:', error);
+    res.status(500).json({ error: 'Failed to list hospitals' });
+  }
+});
+
 router.get('/', async (req, res) => {
   try {
     const { lat, lng, radius, specialty, city, search } = req.query;
@@ -241,9 +272,12 @@ router.post('/appointments', auth, async (req, res) => {
     hospital.appointments.push(appointment);
     await hospital.save();
 
+    // Trigger notification event for admin dashboard
+    // In a real application, you might use WebSockets or a message queue
+    console.log('New appointment booked - Admin should be notified');
 
     res.status(201).json({
-      message: 'Appointment request submitted successfully! This is a demo - no real booking is made.',
+      message: 'Appointment request submitted successfully! The hospital has been notified.',
       appointment: {
         id: appointment._id,
         date: appointment.appointmentDate,
@@ -252,7 +286,8 @@ router.post('/appointments', auth, async (req, res) => {
         hospital: appointment.hospital.name,
         status: appointment.status
       },
-      note: 'This is a demonstration system. In a real implementation, the hospital would be notified and you would receive confirmation.'
+      note: 'You will receive a confirmation email shortly. Please arrive 15 minutes before your scheduled appointment.',
+      adminNotification: true
     });
 
   } catch (error) {

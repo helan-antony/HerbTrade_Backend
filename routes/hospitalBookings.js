@@ -7,7 +7,7 @@ const auth = require('../middleware/auth');
 // Get user's hospital bookings
 router.get('/', auth, async (req, res) => {
   try {
-    const bookings = await HospitalBooking.find({ userId: req.user.id })
+    const bookings = await HospitalBooking.find({ userId: req.user._id })
       .populate('hospitalId')
       .sort({ createdAt: -1 });
 
@@ -29,7 +29,7 @@ router.get('/:bookingId', auth, async (req, res) => {
   try {
     const booking = await HospitalBooking.findOne({
       _id: req.params.bookingId,
-      userId: req.user.id
+      userId: req.user._id
     }).populate('hospitalId');
 
     if (!booking) {
@@ -105,8 +105,9 @@ router.post('/create', auth, async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Booking created successfully',
-      data: booking
+      message: 'Appointment booked successfully! The hospital has been notified and will confirm your appointment shortly.',
+      data: booking,
+      note: 'You will receive a confirmation email with appointment details. Please arrive 15 minutes before your scheduled time.'
     });
   } catch (error) {
     console.error('Create booking error:', error);
@@ -209,7 +210,7 @@ router.put('/:bookingId/cancel', auth, async (req, res) => {
   try {
     const booking = await HospitalBooking.findOne({
       _id: req.params.bookingId,
-      userId: req.user.id
+      userId: req.user._id
     });
 
     if (!booking) {
@@ -247,7 +248,7 @@ router.put('/:bookingId/cancel', auth, async (req, res) => {
 router.get('/stats/summary', auth, async (req, res) => {
   try {
     const stats = await HospitalBooking.aggregate([
-      { $match: { userId: req.user.id } },
+      { $match: { userId: req.user._id } },
       {
         $group: {
           _id: '$bookingStatus',

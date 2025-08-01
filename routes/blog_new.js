@@ -4,14 +4,6 @@ const Comment = require('../models/Comment');
 const auth = require('../middleware/auth');
 const router = express.Router();
 
-console.log('🔧 Blog routes file loaded!');
-
-// Test route
-router.get('/test', (req, res) => {
-  console.log('🧪 Test route hit!');
-  res.json({ message: 'Blog routes are working!' });
-});
-
 // Get all blog posts
 router.get('/', async (req, res) => {
   try {

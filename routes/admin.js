@@ -6,6 +6,7 @@ const Seller = require('../models/Seller');
 const Cart = require('../models/Cart');
 const Wishlist = require('../models/Wishlist');
 const HospitalBooking = require('../models/HospitalBooking');
+const Hospital = require('../models/Hospital');
 const auth = require('../middleware/auth');
 const router = express.Router();
 
@@ -335,6 +336,234 @@ router.get('/orders', auth, async (req, res) => {
   } catch (error) {
     console.error('Error fetching orders:', error);
     res.status(500).json({ error: 'Failed to fetch orders' });
+  }
+});
+
+// Get all hospital bookings for admin
+router.get('/hospital-bookings', auth, async (req, res) => {
+  try {
+    console.log('Fetching hospital bookings for admin...');
+    console.log('User making request:', req.user);
+
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied. Admin role required.'
+      });
+    }
+
+    const bookings = await HospitalBooking.find({})
+      .populate('userId', 'name email')
+      .populate('hospitalId', 'name address phone')
+      .sort({ createdAt: -1 });
+
+    console.log('Found bookings:', bookings.length);
+    if (bookings.length > 0) {
+      console.log('Sample booking:', JSON.stringify(bookings[0], null, 2));
+    }
+
+    res.json({
+      success: true,
+      data: bookings,
+      count: bookings.length
+    });
+  } catch (error) {
+    console.error('Error fetching hospital bookings:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch hospital bookings',
+      details: error.message
+    });
+  }
+});
+
+// Test route to check if HospitalBooking data exists
+router.get('/test-bookings', auth, async (req, res) => {
+  try {
+    const count = await HospitalBooking.countDocuments();
+    const allBookings = await HospitalBooking.find({}).limit(5);
+
+    res.json({
+      message: 'Test route working',
+      totalBookings: count,
+      sampleBookings: allBookings
+    });
+  } catch (error) {
+    console.error('Test route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Simple test route without auth
+router.get('/test-db', async (req, res) => {
+  try {
+    console.log('Testing database connection...');
+    console.log('HospitalBooking model:', HospitalBooking);
+
+    const count = await HospitalBooking.countDocuments();
+    console.log('Total bookings count:', count);
+
+    const sample = await HospitalBooking.findOne();
+    console.log('Sample booking:', sample);
+
+    const allBookings = await HospitalBooking.find({}).limit(3);
+    console.log('All bookings (first 3):', allBookings);
+
+    res.json({
+      message: 'Database test successful',
+      totalBookings: count,
+      sampleBooking: sample,
+      allBookings: allBookings,
+      modelName: HospitalBooking.modelName,
+      collectionName: HospitalBooking.collection.name
+    });
+  } catch (error) {
+    console.error('Database test error:', error);
+    res.status(500).json({
+      error: error.message,
+      stack: error.stack
+    });
+  }
+});
+
+// Update hospital booking status (approve/reject)
+router.patch('/hospital-bookings/:id/status', auth, async (req, res) => {
+  try {
+    const { bookingStatus } = req.body;
+    const validStatuses = ['Pending', 'Confirmed', 'Cancelled', 'Completed', 'Rescheduled'];
+
+    if (!validStatuses.includes(bookingStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid booking status'
+      });
+    }
+
+    const booking = await HospitalBooking.findByIdAndUpdate(
+      req.params.id,
+      { bookingStatus, updatedAt: new Date() },
+      { new: true }
+    ).populate('userId', 'name email');
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Booking not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Booking ${bookingStatus.toLowerCase()} successfully`,
+      data: booking
+    });
+  } catch (error) {
+    console.error('Error updating booking status:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update booking status'
+    });
+  }
+});
+
+// Notification Schema (in-memory for now, should be moved to a separate model)
+let notifications = [];
+
+// Get all appointments for admin
+router.get('/appointments', auth, async (req, res) => {
+  try {
+    const hospitals = await Hospital.find({});
+    let allAppointments = [];
+
+    hospitals.forEach(hospital => {
+      if (hospital.appointments && hospital.appointments.length > 0) {
+        const hospitalAppointments = hospital.appointments.map(appointment => ({
+          ...appointment.toObject(),
+          hospitalName: hospital.name,
+          hospitalId: hospital._id
+        }));
+        allAppointments.push(...hospitalAppointments);
+      }
+    });
+
+    // Sort by creation date (newest first)
+    allAppointments.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    res.json(allAppointments);
+  } catch (error) {
+    console.error('Error fetching appointments:', error);
+    res.status(500).json({ error: 'Failed to fetch appointments' });
+  }
+});
+
+// Get notifications for admin
+router.get('/notifications', auth, async (req, res) => {
+  try {
+    // Get recent appointments (last 24 hours) as notifications
+    const hospitals = await Hospital.find({});
+    let recentAppointments = [];
+
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    hospitals.forEach(hospital => {
+      if (hospital.appointments && hospital.appointments.length > 0) {
+        const recent = hospital.appointments.filter(appointment =>
+          new Date(appointment.createdAt) > yesterday && appointment.status === 'pending'
+        );
+
+        recent.forEach(appointment => {
+          recentAppointments.push({
+            _id: appointment._id,
+            title: 'New Appointment Booking',
+            message: `${appointment.patientDetails.name} booked an appointment with Dr. ${appointment.doctor.name} at ${hospital.name}`,
+            type: 'appointment',
+            appointmentId: appointment._id,
+            hospitalId: hospital._id,
+            createdAt: appointment.createdAt,
+            read: false
+          });
+        });
+      }
+    });
+
+    // Sort by creation date (newest first)
+    recentAppointments.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    const unreadCount = recentAppointments.filter(notif => !notif.read).length;
+
+    res.json({
+      notifications: recentAppointments,
+      unreadCount: unreadCount
+    });
+  } catch (error) {
+    console.error('Error fetching notifications:', error);
+    res.status(500).json({ error: 'Failed to fetch notifications' });
+  }
+});
+
+// Mark notification as read
+router.patch('/notifications/:id/read', auth, async (req, res) => {
+  try {
+    // In a real implementation, you would update the notification in the database
+    // For now, we'll just return success
+    res.json({ message: 'Notification marked as read' });
+  } catch (error) {
+    console.error('Error marking notification as read:', error);
+    res.status(500).json({ error: 'Failed to mark notification as read' });
+  }
+});
+
+// Mark all notifications as read
+router.patch('/notifications/mark-all-read', auth, async (req, res) => {
+  try {
+    // In a real implementation, you would update all notifications in the database
+    // For now, we'll just return success
+    res.json({ message: 'All notifications marked as read' });
+  } catch (error) {
+    console.error('Error marking all notifications as read:', error);
+    res.status(500).json({ error: 'Failed to mark all notifications as read' });
   }
 });
 
