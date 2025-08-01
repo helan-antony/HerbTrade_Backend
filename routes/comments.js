@@ -4,6 +4,14 @@ const Blog = require('../models/Blog');
 const auth = require('../middleware/auth');
 const router = express.Router();
 
+console.log('🔧 Comments routes file loaded!');
+
+// Test route
+router.get('/test', (req, res) => {
+  console.log('🧪 Comments test route hit!');
+  res.json({ message: 'Comments routes are working!' });
+});
+
 router.get('/blog/:blogId', async (req, res) => {
   try {
     console.log('Fetching comments for blog:', req.params.blogId);
