@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 const User = require('../models/User');
 const Seller = require('../models/Seller');
+const auth = require('../middleware/auth');
 const router = express.Router();
 
 // Configure nodemailer
@@ -138,6 +139,30 @@ router.patch('/profile', async (req, res) => {
 // Test route
 router.get('/test', (req, res) => {
   res.json({ message: 'Auth routes are working!' });
+});
+
+// Get user profile
+router.get('/profile', auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('-password');
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      user: user
+    });
+  } catch (error) {
+    console.error('Get profile error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching profile'
+    });
+  }
 });
 
 // Forgot Password Route
