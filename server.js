@@ -115,7 +115,7 @@ app.get('/api/health', (req, res) => {
     status: 'OK', 
     message: 'HerbTrade Backend is running!',
     timestamp: new Date().toISOString(),
-    cors: 'Updated to allow your frontend URL'
+    cors: 'Updated for network access'
   });
 });
 

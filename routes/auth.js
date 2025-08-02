@@ -16,15 +16,6 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-// Test email configuration on startup
-transporter.verify((error, success) => {
-  if (error) {
-    console.log('Email configuration error:', error.message);
-  } else {
-    console.log('Email server is ready to send messages');
-  }
-});
-
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
   try {
@@ -270,26 +261,18 @@ router.post('/forgot-password', async (req, res) => {
       `
     };
 
-    // Try to send email, but don't fail the request if email fails
-    try {
-      const result = await transporter.sendMail(mailOptions);
-      console.log('Email sent successfully:', result.messageId);
-    } catch (emailError) {
-      console.error('Email sending failed:', emailError.message);
-      // Log the reset URL for development purposes
-      console.log('Reset URL (for development):', resetUrl);
-    }
+    // Send email
+    const result = await transporter.sendMail(mailOptions);
+    console.log('Email sent successfully:', result.messageId);
 
     res.status(200).json({
-      message: 'If this email address exists, a password reset link has been sent.',
-      // Include reset URL in development mode
-      ...(process.env.NODE_ENV === 'development' && { resetUrl })
+      message: 'If this email address exists, a password reset link has been sent.'
     });
 
   } catch (error) {
     console.error('Forgot password error:', error);
     res.status(500).json({
-      error: 'Failed to process password reset request',
+      error: 'Failed to send reset email',
       details: error.message
     });
   }
