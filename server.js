@@ -23,10 +23,13 @@ dotenv.config();
 
 const app = express();
 
-// Middleware
+// Middleware - Permissive CORS for development (temporary fix)
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:5174'],
-  credentials: true
+  origin: true,  // Allow all origins during development
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  optionsSuccessStatus: 200 // For legacy browser support
 }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
@@ -105,7 +108,17 @@ app.use('/api/wishlist', wishlistRoutes);
 console.log('✅ Wishlist routes registered');
 app.use('/api/admin', adminRoutes);
 console.log('✅ Admin routes registered');
-// Test simple route
+// Health check and test routes
+app.get('/api/health', (req, res) => {
+  console.log('🏥 Health check route hit!');
+  res.json({ 
+    status: 'OK', 
+    message: 'HerbTrade Backend is running!',
+    timestamp: new Date().toISOString(),
+    cors: 'Updated to allow your frontend URL'
+  });
+});
+
 app.get('/api/test', (req, res) => {
   console.log('🔍 Simple test route hit!');
   res.json({ message: 'Express is working!' });
