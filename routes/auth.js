@@ -254,11 +254,7 @@ router.post('/forgot-password', async (req, res) => {
               </a>
             </div>
 
-            <p style="color: #6b7280; font-size: 14px; line-height: 1.6;">
-              If you can't click the button, copy and paste this link into your browser:
-              <br>
-              <a href="${resetUrl}" style="color: #059669; word-break: break-all;">${resetUrl}</a>
-            </p>
+
 
             <p style="color: #6b7280; font-size: 14px; line-height: 1.6;">
               This link will expire in 1 hour for security reasons.
