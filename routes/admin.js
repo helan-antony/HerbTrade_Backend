@@ -156,14 +156,151 @@ router.get('/employees', auth, async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    const employees = await Seller.find({ 
-      role: { $in: ['employee', 'manager', 'supervisor'] } 
+    const employees = await Seller.find({
+      role: { $in: ['employee', 'manager', 'supervisor'] }
     }).select('-password').sort({ createdAt: -1 });
-    
+
     res.json(employees);
   } catch (error) {
     console.error('Error fetching employees:', error);
     res.status(500).json({ error: 'Failed to fetch employees' });
+  }
+});
+
+// Toggle employee status (enable/disable)
+router.put('/employees/:employeeId/toggle-status', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const employee = await Seller.findById(req.params.employeeId);
+    if (!employee) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    // Toggle the isActive status
+    employee.isActive = !employee.isActive;
+    await employee.save();
+
+    res.json({
+      success: true,
+      message: `Employee ${employee.isActive ? 'enabled' : 'disabled'} successfully`,
+      employee: {
+        id: employee._id,
+        name: employee.name,
+        email: employee.email,
+        isActive: employee.isActive,
+        role: employee.role,
+        department: employee.department
+      }
+    });
+  } catch (error) {
+    console.error('Error toggling employee status:', error);
+    res.status(500).json({
+      error: 'Failed to toggle employee status',
+      details: error.message
+    });
+  }
+});
+
+// Update employee details
+router.put('/employees/:employeeId', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const { name, email, role, department } = req.body;
+
+    const employee = await Seller.findById(req.params.employeeId);
+    if (!employee) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    // Check if email is being changed and if it already exists
+    if (email && email !== employee.email) {
+      const existingEmployee = await Seller.findOne({
+        email: email.toLowerCase().trim(),
+        _id: { $ne: req.params.employeeId }
+      });
+      if (existingEmployee) {
+        return res.status(400).json({ error: 'Email already exists' });
+      }
+
+      const existingUser = await User.findOne({
+        email: email.toLowerCase().trim()
+      });
+      if (existingUser) {
+        return res.status(400).json({ error: 'Email already exists in the system' });
+      }
+    }
+
+    // Update employee fields
+    if (name) employee.name = name.trim();
+    if (email) employee.email = email.toLowerCase().trim();
+    if (role) employee.role = role;
+    if (department !== undefined) employee.department = department;
+    employee.updatedAt = new Date();
+
+    const updatedEmployee = await employee.save();
+
+    res.json({
+      success: true,
+      message: 'Employee updated successfully',
+      employee: {
+        id: updatedEmployee._id,
+        name: updatedEmployee.name,
+        email: updatedEmployee.email,
+        role: updatedEmployee.role,
+        department: updatedEmployee.department,
+        isActive: updatedEmployee.isActive,
+        createdAt: updatedEmployee.createdAt,
+        updatedAt: updatedEmployee.updatedAt
+      }
+    });
+  } catch (error) {
+    console.error('Error updating employee:', error);
+    res.status(500).json({
+      error: 'Failed to update employee',
+      details: error.message
+    });
+  }
+});
+
+// Disable employee (legacy endpoint - use toggle-status instead)
+router.put('/employees/:employeeId/disable', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const employee = await Seller.findById(req.params.employeeId);
+    if (!employee) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    employee.isActive = false;
+    await employee.save();
+
+    res.json({
+      success: true,
+      message: 'Employee disabled successfully',
+      employee: {
+        id: employee._id,
+        name: employee.name,
+        email: employee.email,
+        isActive: employee.isActive,
+        role: employee.role,
+        department: employee.department
+      }
+    });
+  } catch (error) {
+    console.error('Error disabling employee:', error);
+    res.status(500).json({
+      error: 'Failed to disable employee',
+      details: error.message
+    });
   }
 });
 router.get('/users', auth, async (req, res) => {
@@ -466,6 +603,94 @@ router.patch('/hospital-bookings/:id/status', auth, async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to update booking status'
+    });
+  }
+});
+
+// Update hospital booking details
+router.put('/hospital-bookings/:id', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const { patientDetails, appointmentDetails, bookingStatus } = req.body;
+
+    const booking = await HospitalBooking.findById(req.params.id);
+    if (!booking) {
+      return res.status(404).json({ error: 'Booking not found' });
+    }
+
+    // Update booking fields
+    if (patientDetails) {
+      booking.patientDetails = { ...booking.patientDetails, ...patientDetails };
+    }
+    if (appointmentDetails) {
+      booking.appointmentDetails = { ...booking.appointmentDetails, ...appointmentDetails };
+    }
+    if (bookingStatus) {
+      booking.bookingStatus = bookingStatus;
+    }
+    booking.updatedAt = new Date();
+
+    const updatedBooking = await booking.save();
+
+    res.json({
+      success: true,
+      message: 'Booking updated successfully',
+      data: updatedBooking
+    });
+  } catch (error) {
+    console.error('Error updating booking:', error);
+    res.status(500).json({
+      error: 'Failed to update booking',
+      details: error.message
+    });
+  }
+});
+
+// Test route for debugging
+router.get('/test-delete/:id', (req, res) => {
+  console.log('Test route called with ID:', req.params.id);
+  res.json({ message: 'Test route working', id: req.params.id });
+});
+
+// Delete hospital booking
+router.delete('/hospital-bookings/:id', auth, async (req, res) => {
+  try {
+    console.log('DELETE /hospital-bookings/:id called with ID:', req.params.id);
+
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Check if the ID is a valid MongoDB ObjectId format
+    if (!req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
+      console.log('Invalid ObjectId format:', req.params.id);
+      return res.status(400).json({
+        error: 'Invalid booking ID format',
+        message: 'This appears to be demo data. In a real application, bookings would have valid database IDs.'
+      });
+    }
+
+    const booking = await HospitalBooking.findById(req.params.id);
+    if (!booking) {
+      console.log('Booking not found with ID:', req.params.id);
+      return res.status(404).json({ error: 'Booking not found' });
+    }
+
+    await HospitalBooking.findByIdAndDelete(req.params.id);
+    console.log('Booking deleted successfully:', req.params.id);
+
+    res.json({
+      success: true,
+      message: 'Booking deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting booking:', error);
+    res.status(500).json({
+      error: 'Failed to delete booking',
+      details: error.message
     });
   }
 });
