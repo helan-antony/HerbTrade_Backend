@@ -7,14 +7,12 @@ const Seller = require('../models/Seller');
 const auth = require('../middleware/auth');
 const router = express.Router();
 
-// Configure nodemailer
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  }
+// Test endpoint to check if auth routes are working
+router.get('/test', (req, res) => {
+  res.json({ message: 'Auth routes are working!' });
 });
+
+// Nodemailer will be configured inside the route handlers
 
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
@@ -170,7 +168,7 @@ router.post('/forgot-password', async (req, res) => {
   const { email } = req.body;
 
   try {
-    console.log('Forgot password request for:', email);
+    console.log('🔄 Forgot password request for:', email);
 
     // Check if user exists in User collection
     let user = await User.findOne({ email });
@@ -205,11 +203,25 @@ router.post('/forgot-password', async (req, res) => {
     // Create reset URL
     const resetUrl = `http://localhost:5173/reset-password?token=${resetToken}`;
 
-    console.log('Attempting to send email...');
+    console.log('📧 Attempting to send email...');
+
+    // Configure nodemailer transporter
+    const transporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false,
+      auth: {
+        user: 'helanantony03@gmail.com',
+        pass: 'vwwxdszgvdsztvze'
+      },
+      tls: {
+        rejectUnauthorized: false
+      }
+    });
 
     // Email content
     const mailOptions = {
-      from: process.env.EMAIL_USER,
+      from: 'helanantony03@gmail.com',
       to: email,
       subject: 'Password Reset - HerbTrade',
       html: `
@@ -263,14 +275,14 @@ router.post('/forgot-password', async (req, res) => {
 
     // Send email
     const result = await transporter.sendMail(mailOptions);
-    console.log('Email sent successfully:', result.messageId);
+    console.log('✅ Email sent successfully:', result.messageId);
 
     res.status(200).json({
       message: 'If this email address exists, a password reset link has been sent.'
     });
 
   } catch (error) {
-    console.error('Forgot password error:', error);
+    console.error('❌ Forgot password error:', error);
     res.status(500).json({
       error: 'Failed to send reset email',
       details: error.message

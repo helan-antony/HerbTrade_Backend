@@ -10,13 +10,7 @@ const Hospital = require('../models/Hospital');
 const auth = require('../middleware/auth');
 const router = express.Router();
 
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER || 'your-email@gmail.com',
-    pass: process.env.EMAIL_PASS || 'your-app-password'
-  }
-});
+// Transporter will be created inside route handlers to avoid env variable issues
 
 function generatePassword() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -113,6 +107,15 @@ router.post('/add-employee', auth, async (req, res) => {
         </body>
         </html>
       `;
+
+      // Create transporter inside the route handler
+      const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: process.env.EMAIL_USER || 'your-email@gmail.com',
+          pass: process.env.EMAIL_PASS || 'your-app-password'
+        }
+      });
 
       await transporter.sendMail({
         from: process.env.EMAIL_USER || 'noreply@herbtrade.com',
