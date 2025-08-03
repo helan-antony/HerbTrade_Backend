@@ -28,7 +28,7 @@ router.post('/login', async (req, res) => {
     if (!user) {
       return res.status(400).json({ error: 'Invalid credentials' });
     }
-    
+
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(400).json({ error: 'Invalid credentials' });
@@ -96,6 +96,8 @@ router.post('/register', async (req, res) => {
     res.status(400).json({ error: err.message });
   }
 });
+
+
 
 router.post('/add-seller', async (req, res) => {
   const { name, email, phone, password, profilePic } = req.body;
