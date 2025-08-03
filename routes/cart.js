@@ -8,7 +8,7 @@ const auth = require('../middleware/auth');
 router.get('/', auth, async (req, res) => {
   try {
     let cart = await Cart.findOne({ userId: req.user.id }).populate('items.productId');
-    
+
     if (!cart) {
       cart = new Cart({ userId: req.user.id, items: [] });
       await cart.save();
@@ -149,7 +149,7 @@ router.delete('/remove/:productId', auth, async (req, res) => {
     const { productId } = req.params;
 
     const cart = await Cart.findOne({ userId: req.user.id });
-    
+
     if (!cart) {
       return res.status(404).json({
         success: false,
