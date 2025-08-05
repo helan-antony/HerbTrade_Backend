@@ -261,4 +261,50 @@ router.put('/profile', auth, async (req, res) => {
   }
 });
 
+// Change password for sellers
+router.put('/change-password', auth, async (req, res) => {
+  try {
+    if (!['seller', 'employee', 'manager', 'supervisor'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Access denied. Seller privileges required.' });
+    }
+
+    const { currentPassword, newPassword } = req.body;
+    const bcrypt = require('bcryptjs');
+    const Seller = require('../models/Seller');
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current password and new password are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters long' });
+    }
+
+    const seller = await Seller.findById(req.user._id);
+    if (!seller) {
+      return res.status(404).json({ error: 'Seller not found' });
+    }
+
+    // Verify current password
+    const isMatch = await bcrypt.compare(currentPassword, seller.password);
+    if (!isMatch) {
+      return res.status(400).json({ error: 'Current password is incorrect' });
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    seller.password = hashedPassword;
+    
+    await seller.save();
+
+    res.json({ 
+      success: true,
+      message: 'Password changed successfully' 
+    });
+  } catch (error) {
+    console.error('Error changing seller password:', error);
+    res.status(500).json({ error: 'Failed to change password' });
+  }
+});
+
 module.exports = router;

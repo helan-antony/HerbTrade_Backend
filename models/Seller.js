@@ -9,6 +9,8 @@ const sellerSchema = new mongoose.Schema({
   role: { type: String, enum: ['seller', 'employee', 'manager', 'supervisor'], default: 'seller' },
   department: { type: String, default: '' },
   isActive: { type: Boolean, default: true },
+  isFirstLogin: { type: Boolean, default: true },
+  lastLogin: { type: Date },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Seller' },
   createdAt: { type: Date, default: Date.now }
 });

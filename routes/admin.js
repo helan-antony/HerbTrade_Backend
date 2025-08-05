@@ -88,14 +88,22 @@ router.post('/add-employee', auth, async (req, res) => {
               <div class="credentials">
                 <h3>🔐 Your Login Credentials:</h3>
                 <p><strong>Email:</strong> ${email}</p>
-                <p><strong>Password:</strong> ${password}</p>
+                <p><strong>Temporary Password:</strong> ${password}</p>
                 <p><strong>Role:</strong> ${role}</p>
                 <p><strong>Department:</strong> ${department}</p>
               </div>
               
-              <p>Please keep these credentials secure and change your password after your first login.</p>
+              <div style="background: #fef3c7; padding: 15px; border-radius: 8px; border-left: 4px solid #f59e0b; margin: 20px 0;">
+                <h4 style="color: #92400e; margin: 0 0 10px 0;">🔒 Important Security Notice:</h4>
+                <ul style="color: #92400e; margin: 0; padding-left: 20px;">
+                  <li>This is a temporary password for your first login</li>
+                  <li>You will be prompted to change it after logging in</li>
+                  <li>Keep these credentials secure and do not share them</li>
+                  <li>Contact your administrator if you have any issues</li>
+                </ul>
+              </div>
               
-              <a href="http://localhost:3000/login" class="button">Login to Dashboard</a>
+              <a href="http://localhost:5173/login" class="button">Login to Dashboard</a>
               
               <p>If you have any questions, please contact your administrator.</p>
             </div>
