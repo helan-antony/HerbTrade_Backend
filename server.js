@@ -5,6 +5,7 @@ const dotenv = require('dotenv');
 const authRoutes = require('./routes/auth');
 const blogRoutes = require('./routes/blog');
 const adminRoutes = require('./routes/admin');
+const sellerRoutes = require('./routes/seller');
 const productRoutes = require('./routes/products');
 const orderRoutes = require('./routes/orders');
 const commentRoutes = require('./routes/comments');
@@ -108,6 +109,8 @@ app.use('/api/wishlist', wishlistRoutes);
 console.log('✅ Wishlist routes registered');
 app.use('/api/admin', adminRoutes);
 console.log('✅ Admin routes registered');
+app.use('/api/seller', sellerRoutes);
+console.log('✅ Seller routes registered');
 // Health check and test routes
 app.get('/api/health', (req, res) => {
   console.log('🏥 Health check route hit!');

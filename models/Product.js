@@ -9,7 +9,7 @@ const productSchema = new mongoose.Schema({
   uses: [String],
   quality: { type: String, enum: ['Premium', 'Standard', 'Organic'], default: 'Standard' },
   inStock: { type: Number, default: 0 },
-  seller: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  seller: { type: mongoose.Schema.Types.ObjectId, ref: 'Seller', required: true },
   ratings: [{
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     rating: { type: Number, min: 1, max: 5 },
