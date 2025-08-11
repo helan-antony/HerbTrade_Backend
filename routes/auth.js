@@ -29,23 +29,9 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Invalid credentials' });
     }
 
-    // Check if account is active (for both users and sellers)
-    if (user.isActive === false) {
-      return res.status(403).json({ error: 'Account is disabled. Please contact administrator.' });
-    }
-
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(400).json({ error: 'Invalid credentials' });
-    }
-
-    // Update last login and first login status for sellers
-    if (isFromSellerCollection) {
-      user.lastLogin = new Date();
-      if (user.isFirstLogin) {
-        user.isFirstLogin = false;
-      }
-      await user.save();
     }
     
     const token = jwt.sign(
@@ -66,8 +52,7 @@ router.post('/login', async (req, res) => {
         email: user.email, 
         role: user.role,
         department: user.department || '',
-        profilePic: user.profilePic || '',
-        isFirstLogin: user.isFirstLogin || false
+        profilePic: user.profilePic || ''
       } 
     });
   } catch (err) {

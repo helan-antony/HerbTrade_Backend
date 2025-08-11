@@ -8,7 +8,23 @@ const productSchema = new mongoose.Schema({
   category: { type: String, required: true },
   uses: [String],
   quality: { type: String, enum: ['Premium', 'Standard', 'Organic'], default: 'Standard' },
+  grade: { type: String, enum: ['A+', 'A', 'B', 'Premium'], default: 'A' },
   inStock: { type: Number, default: 0 },
+  quantityUnit: { type: String, enum: ['grams', 'count'], default: 'grams' },
+  
+  // Medicine-specific fields
+  dosageForm: { type: String }, // tablet, capsule, syrup, powder, oil, churna, vati, etc.
+  strength: { type: String }, // e.g., 500mg, 10ml
+  activeIngredients: [String], // main ingredients
+  indications: [String], // what it treats
+  dosage: { type: String }, // how to take
+  contraindications: { type: String }, // when not to use
+  sideEffects: { type: String }, // possible side effects
+  expiryDate: { type: Date },
+  batchNumber: { type: String },
+  manufacturer: { type: String },
+  licenseNumber: { type: String },
+  
   seller: { type: mongoose.Schema.Types.ObjectId, ref: 'Seller', required: true },
   ratings: [{
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

@@ -1,6 +1,7 @@
 const express = require('express');
 const Product = require('../models/Product');
 const Order = require('../models/Order');
+const Leave = require('../models/Leave');
 const auth = require('../middleware/auth');
 const router = express.Router();
 
@@ -126,7 +127,12 @@ router.put('/products/:id', auth, async (req, res) => {
       return res.status(404).json({ error: 'Product not found or access denied' });
     }
 
-    const { name, description, price, category, uses, quality, inStock } = req.body;
+    const { 
+      name, description, price, category, uses, quality, inStock, image, grade, quantityUnit,
+      // Medicine-specific fields
+      dosageForm, strength, activeIngredients, indications, dosage, contraindications, 
+      sideEffects, expiryDate, batchNumber, manufacturer, licenseNumber
+    } = req.body;
 
     product.name = name || product.name;
     product.description = description || product.description;
@@ -134,7 +140,25 @@ router.put('/products/:id', auth, async (req, res) => {
     product.category = category || product.category;
     product.uses = uses || product.uses;
     product.quality = quality || product.quality;
+    product.grade = grade || product.grade;
     product.inStock = inStock !== undefined ? parseInt(inStock) : product.inStock;
+    product.image = image || product.image;
+    product.quantityUnit = quantityUnit || product.quantityUnit;
+
+    // Update medicine-specific fields if category is Medicines
+    if (category === 'Medicines' || product.category === 'Medicines') {
+      product.dosageForm = dosageForm || product.dosageForm;
+      product.strength = strength || product.strength;
+      product.activeIngredients = activeIngredients || product.activeIngredients;
+      product.indications = indications || product.indications;
+      product.dosage = dosage || product.dosage;
+      product.contraindications = contraindications || product.contraindications;
+      product.sideEffects = sideEffects || product.sideEffects;
+      product.expiryDate = expiryDate ? new Date(expiryDate) : product.expiryDate;
+      product.batchNumber = batchNumber || product.batchNumber;
+      product.manufacturer = manufacturer || product.manufacturer;
+      product.licenseNumber = licenseNumber || product.licenseNumber;
+    }
 
     await product.save();
     await product.populate('seller', 'name email');
@@ -261,49 +285,127 @@ router.put('/profile', auth, async (req, res) => {
   }
 });
 
-// Change password for sellers
-router.put('/change-password', auth, async (req, res) => {
+// Leave Management Routes
+
+// Get seller's leave applications
+router.get('/leaves', auth, async (req, res) => {
   try {
     if (!['seller', 'employee', 'manager', 'supervisor'].includes(req.user.role)) {
       return res.status(403).json({ error: 'Access denied. Seller privileges required.' });
     }
 
-    const { currentPassword, newPassword } = req.body;
-    const bcrypt = require('bcryptjs');
-    const Seller = require('../models/Seller');
+    const leaves = await Leave.find({ seller: req.user._id })
+      .populate('reviewedBy', 'name email')
+      .sort({ createdAt: -1 });
 
-    if (!currentPassword || !newPassword) {
-      return res.status(400).json({ error: 'Current password and new password are required' });
+    res.json(leaves);
+  } catch (error) {
+    console.error('Error fetching leaves:', error);
+    res.status(500).json({ error: 'Failed to fetch leave applications' });
+  }
+});
+
+// Apply for leave
+router.post('/leaves', auth, async (req, res) => {
+  try {
+    if (!['seller', 'employee', 'manager', 'supervisor'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Access denied. Seller privileges required.' });
     }
 
-    if (newPassword.length < 6) {
-      return res.status(400).json({ error: 'New password must be at least 6 characters long' });
+    const { type, reason, description, startDate, endDate } = req.body;
+
+    // Validation
+    if (!type || !reason || !description || !startDate || !endDate) {
+      return res.status(400).json({ error: 'All fields are required' });
     }
 
-    const seller = await Seller.findById(req.user._id);
-    if (!seller) {
-      return res.status(404).json({ error: 'Seller not found' });
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const today = new Date();
+
+    if (start < today) {
+      return res.status(400).json({ error: 'Start date cannot be in the past' });
     }
 
-    // Verify current password
-    const isMatch = await bcrypt.compare(currentPassword, seller.password);
-    if (!isMatch) {
-      return res.status(400).json({ error: 'Current password is incorrect' });
+    if (end < start) {
+      return res.status(400).json({ error: 'End date cannot be before start date' });
     }
 
-    // Hash new password
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    seller.password = hashedPassword;
-    
-    await seller.save();
+    const leave = new Leave({
+      seller: req.user._id,
+      type,
+      reason,
+      description,
+      startDate: start,
+      endDate: end
+    });
 
-    res.json({ 
-      success: true,
-      message: 'Password changed successfully' 
+    await leave.save();
+    await leave.populate('seller', 'name email');
+
+    res.status(201).json({
+      message: 'Leave application submitted successfully. Admin will review and send email notification.',
+      leave
     });
   } catch (error) {
-    console.error('Error changing seller password:', error);
-    res.status(500).json({ error: 'Failed to change password' });
+    console.error('Error applying for leave:', error);
+    res.status(500).json({ error: 'Failed to submit leave application' });
+  }
+});
+
+// Update leave application (only pending leaves)
+router.put('/leaves/:id', auth, async (req, res) => {
+  try {
+    if (!['seller', 'employee', 'manager', 'supervisor'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Access denied. Seller privileges required.' });
+    }
+
+    const leave = await Leave.findOne({ _id: req.params.id, seller: req.user._id });
+    if (!leave) {
+      return res.status(404).json({ error: 'Leave application not found' });
+    }
+
+    if (leave.status !== 'pending') {
+      return res.status(400).json({ error: 'Cannot modify leave application that has been reviewed' });
+    }
+
+    const { type, reason, description, startDate, endDate } = req.body;
+
+    if (type) leave.type = type;
+    if (reason) leave.reason = reason;
+    if (description) leave.description = description;
+    if (startDate) leave.startDate = new Date(startDate);
+    if (endDate) leave.endDate = new Date(endDate);
+
+    await leave.save();
+    res.json({ message: 'Leave application updated successfully', leave });
+  } catch (error) {
+    console.error('Error updating leave:', error);
+    res.status(500).json({ error: 'Failed to update leave application' });
+  }
+});
+
+// Cancel leave application (only pending leaves)
+router.delete('/leaves/:id', auth, async (req, res) => {
+  try {
+    if (!['seller', 'employee', 'manager', 'supervisor'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Access denied. Seller privileges required.' });
+    }
+
+    const leave = await Leave.findOne({ _id: req.params.id, seller: req.user._id });
+    if (!leave) {
+      return res.status(404).json({ error: 'Leave application not found' });
+    }
+
+    if (leave.status !== 'pending') {
+      return res.status(400).json({ error: 'Cannot cancel leave application that has been reviewed' });
+    }
+
+    await Leave.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Leave application cancelled successfully' });
+  } catch (error) {
+    console.error('Error cancelling leave:', error);
+    res.status(500).json({ error: 'Failed to cancel leave application' });
   }
 });
 

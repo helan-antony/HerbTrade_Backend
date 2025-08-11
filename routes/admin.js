@@ -7,6 +7,7 @@ const Cart = require('../models/Cart');
 const Wishlist = require('../models/Wishlist');
 const HospitalBooking = require('../models/HospitalBooking');
 const Hospital = require('../models/Hospital');
+const Leave = require('../models/Leave');
 const auth = require('../middleware/auth');
 const router = express.Router();
 
@@ -88,22 +89,14 @@ router.post('/add-employee', auth, async (req, res) => {
               <div class="credentials">
                 <h3>🔐 Your Login Credentials:</h3>
                 <p><strong>Email:</strong> ${email}</p>
-                <p><strong>Temporary Password:</strong> ${password}</p>
+                <p><strong>Password:</strong> ${password}</p>
                 <p><strong>Role:</strong> ${role}</p>
                 <p><strong>Department:</strong> ${department}</p>
               </div>
               
-              <div style="background: #fef3c7; padding: 15px; border-radius: 8px; border-left: 4px solid #f59e0b; margin: 20px 0;">
-                <h4 style="color: #92400e; margin: 0 0 10px 0;">🔒 Important Security Notice:</h4>
-                <ul style="color: #92400e; margin: 0; padding-left: 20px;">
-                  <li>This is a temporary password for your first login</li>
-                  <li>You will be prompted to change it after logging in</li>
-                  <li>Keep these credentials secure and do not share them</li>
-                  <li>Contact your administrator if you have any issues</li>
-                </ul>
-              </div>
+              <p>Please keep these credentials secure and change your password after your first login.</p>
               
-              <a href="http://localhost:5173/login" class="button">Login to Dashboard</a>
+              <a href="\${process.env.FRONTEND_URL || 'http://localhost:3000'}/login" class="button">Login to Dashboard</a>
               
               <p>If you have any questions, please contact your administrator.</p>
             </div>
@@ -800,6 +793,160 @@ router.patch('/notifications/mark-all-read', auth, async (req, res) => {
   } catch (error) {
     console.error('Error marking all notifications as read:', error);
     res.status(500).json({ error: 'Failed to mark all notifications as read' });
+  }
+});
+
+// Leave Management Routes for Admin
+
+// Get all leave applications
+router.get('/leaves', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied. Admin privileges required.' });
+    }
+
+    const leaves = await Leave.find()
+      .populate('seller', 'name email role department')
+      .populate('reviewedBy', 'name email')
+      .sort({ createdAt: -1 });
+
+    res.json(leaves);
+  } catch (error) {
+    console.error('Error fetching leaves:', error);
+    res.status(500).json({ error: 'Failed to fetch leave applications' });
+  }
+});
+
+// Approve/Reject leave application
+router.put('/leaves/:id/status', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied. Admin privileges required.' });
+    }
+
+    const { status, adminComment } = req.body;
+    
+    if (!['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status. Must be approved or rejected.' });
+    }
+
+    const leave = await Leave.findById(req.params.id).populate('seller', 'name email');
+    if (!leave) {
+      return res.status(404).json({ error: 'Leave application not found' });
+    }
+
+    leave.status = status;
+    leave.adminComment = adminComment || '';
+    leave.reviewedBy = req.user._id;
+    leave.reviewedAt = new Date();
+
+    await leave.save();
+
+    // Send email notification to seller
+    try {
+      const transporter = nodemailer.createTransporter({
+        service: 'gmail',
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS
+        }
+      });
+
+      const statusText = status === 'approved' ? 'Approved' : 'Rejected';
+      const statusColor = status === 'approved' ? '#10B981' : '#EF4444';
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: leave.seller.email,
+        subject: `Leave Application ${statusText} - HerbTrade`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: linear-gradient(135deg, #10B981, #059669); padding: 30px; text-align: center;">
+              <h1 style="color: white; margin: 0;">HerbTrade</h1>
+              <p style="color: white; margin: 10px 0 0 0;">Leave Management System</p>
+            </div>
+            
+            <div style="padding: 30px; background: #f9f9f9;">
+              <h2 style="color: #333; margin-bottom: 20px;">Leave Application ${statusText}</h2>
+              
+              <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                <p><strong>Dear ${leave.seller.name},</strong></p>
+                <p>Your leave application has been <span style="color: ${statusColor}; font-weight: bold;">${status.toUpperCase()}</span>.</p>
+                
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin: 20px 0;">
+                  <h3 style="margin: 0 0 10px 0; color: #333;">Leave Details:</h3>
+                  <p><strong>Type:</strong> ${leave.type.charAt(0).toUpperCase() + leave.type.slice(1)}</p>
+                  <p><strong>Dates:</strong> ${leave.startDate.toLocaleDateString()} - ${leave.endDate.toLocaleDateString()}</p>
+                  <p><strong>Reason:</strong> ${leave.reason}</p>
+                  ${adminComment ? `<p><strong>Admin Comment:</strong> ${adminComment}</p>` : ''}
+                </div>
+                
+                <p>If you have any questions, please contact the admin team.</p>
+              </div>
+              
+              <div style="text-align: center; margin-top: 30px;">
+                <p style="color: #666; font-size: 14px;">
+                  This is an automated email from HerbTrade Leave Management System.
+                </p>
+              </div>
+            </div>
+          </div>
+        `
+      };
+
+      await transporter.sendMail(mailOptions);
+    } catch (emailError) {
+      console.error('Error sending email notification:', emailError);
+      // Don't fail the request if email fails
+    }
+
+    res.json({ 
+      message: `Leave application ${status} successfully. Email notification sent to ${leave.seller.email}.`,
+      leave 
+    });
+  } catch (error) {
+    console.error('Error updating leave status:', error);
+    res.status(500).json({ error: 'Failed to update leave status' });
+  }
+});
+
+// Get leave statistics
+router.get('/leaves/stats', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied. Admin privileges required.' });
+    }
+
+    const stats = await Leave.aggregate([
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const typeStats = await Leave.aggregate([
+      {
+        $group: {
+          _id: '$type',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const totalLeaves = await Leave.countDocuments();
+    const pendingLeaves = await Leave.countDocuments({ status: 'pending' });
+
+    res.json({
+      totalLeaves,
+      pendingLeaves,
+      statusStats: stats,
+      typeStats: typeStats
+    });
+  } catch (error) {
+    console.error('Error fetching leave stats:', error);
+    res.status(500).json({ error: 'Failed to fetch leave statistics' });
   }
 });
 

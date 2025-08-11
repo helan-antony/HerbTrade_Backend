@@ -79,13 +79,18 @@ router.get('/:id', async (req, res) => {
 
 router.post('/', auth, async (req, res) => {
   try {
-    const { name, description, price, image, category, uses, quality, inStock } = req.body;
+    const { 
+      name, description, price, image, category, uses, quality, inStock, grade, quantityUnit,
+      // Medicine-specific fields
+      dosageForm, strength, activeIngredients, indications, dosage, contraindications, 
+      sideEffects, expiryDate, batchNumber, manufacturer, licenseNumber
+    } = req.body;
 
     if (!name || !description || !price || !image || !category) {
       return res.status(400).json({ error: 'All required fields must be provided' });
     }
 
-    const product = new Product({
+    const productData = {
       name,
       description,
       price: parseFloat(price),
@@ -93,9 +98,28 @@ router.post('/', auth, async (req, res) => {
       category,
       uses: uses || [],
       quality: quality || 'Standard',
+      grade: grade || 'A',
       inStock: parseInt(inStock) || 0,
+      quantityUnit: quantityUnit || 'grams',
       seller: req.user.id
-    });
+    };
+
+    // Add medicine-specific fields if category is Medicines
+    if (category === 'Medicines') {
+      productData.dosageForm = dosageForm;
+      productData.strength = strength;
+      productData.activeIngredients = activeIngredients || [];
+      productData.indications = indications || [];
+      productData.dosage = dosage;
+      productData.contraindications = contraindications;
+      productData.sideEffects = sideEffects;
+      productData.expiryDate = expiryDate ? new Date(expiryDate) : null;
+      productData.batchNumber = batchNumber;
+      productData.manufacturer = manufacturer;
+      productData.licenseNumber = licenseNumber;
+    }
+
+    const product = new Product(productData);
 
     await product.save();
     await product.populate('seller', 'name email');
