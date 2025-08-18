@@ -62,23 +62,93 @@ router.post('/login', async (req, res) => {
 });
 
 router.post('/google-login', async (req, res) => {
-  const { name, email, picture, googleId } = req.body;
+  const { name, email, picture, googleId, emailVerified } = req.body;
+  
   try {
+    console.log('🔍 Google login attempt for:', email);
+    
+    // Validate required fields
+    if (!name || !email || !googleId) {
+      return res.status(400).json({ 
+        error: 'Missing required fields from Google authentication' 
+      });
+    }
+
+    // Check if user already exists
     let user = await User.findOne({ email });
+    
     if (!user) {
+      console.log('👤 Creating new user for Google login:', email);
+      
+      // Create new user
       user = new User({
         name,
         email,
-        password: await bcrypt.hash(googleId, 10),
-        profilePic: picture,
-        externalLogin: 'google'
+        password: await bcrypt.hash(googleId, 10), // Use googleId as password hash
+        profilePic: picture || '',
+        externalLogin: 'google',
+        emailVerified: emailVerified || false,
+        role: 'user' // Default role
       });
+      
       await user.save();
+      console.log('✅ New Google user created successfully');
+    } else {
+      console.log('👤 Existing user found for Google login:', email);
+      
+      // Update user info if needed
+      let updated = false;
+      if (user.name !== name) {
+        user.name = name;
+        updated = true;
+      }
+      if (picture && user.profilePic !== picture) {
+        user.profilePic = picture;
+        updated = true;
+      }
+      if (!user.externalLogin) {
+        user.externalLogin = 'google';
+        updated = true;
+      }
+      
+      if (updated) {
+        await user.save();
+        console.log('📝 User info updated from Google');
+      }
     }
-    const token = jwt.sign({ id: user._id, role: user.role, collection: 'users' }, 'your-secret-key', { expiresIn: '24h' });
-    res.json({ token, user: { id: user._id, name: user.name, email: user.email, role: user.role, profilePic: user.profilePic } });
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { 
+        id: user._id, 
+        role: user.role, 
+        collection: 'users' 
+      }, 
+      'your-secret-key', 
+      { expiresIn: '24h' }
+    );
+
+    console.log('🎫 JWT token generated for Google user');
+
+    // Return success response
+    res.json({ 
+      token, 
+      user: { 
+        id: user._id, 
+        name: user.name, 
+        email: user.email, 
+        role: user.role, 
+        profilePic: user.profilePic || '',
+        department: user.department || ''
+      } 
+    });
+
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    console.error('❌ Google login error:', err);
+    res.status(500).json({ 
+      error: 'Google authentication failed', 
+      details: err.message 
+    });
   }
 });
 
@@ -331,22 +401,9 @@ router.post('/change-password', auth, async (req, res) => {
   const { currentPassword, newPassword } = req.body;
 
   try {
-    // Find user based on collection info from token
-    let user;
-    if (req.user.collection === 'sellers') {
-      user = await Seller.findById(req.user.id);
-    } else {
-      user = await User.findById(req.user.id);
-    }
-
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    // Verify current password
-    const isMatch = await bcrypt.compare(currentPassword, user.password);
-    if (!isMatch) {
-      return res.status(400).json({ error: 'Current password is incorrect' });
+    // Validate input
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current password and new password are required' });
     }
 
     // Validate new password
@@ -354,12 +411,32 @@ router.post('/change-password', auth, async (req, res) => {
       return res.status(400).json({ error: 'New password must be at least 6 characters long' });
     }
 
+    // Get the user with password field (since middleware excludes it)
+    let userWithPassword;
+    
+    // Check if user is a seller or regular user based on the role
+    if (['seller', 'employee', 'manager', 'supervisor'].includes(req.user.role)) {
+      userWithPassword = await Seller.findById(req.user._id);
+    } else {
+      userWithPassword = await User.findById(req.user._id);
+    }
+
+    if (!userWithPassword) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Verify current password
+    const isMatch = await bcrypt.compare(currentPassword, userWithPassword.password);
+    if (!isMatch) {
+      return res.status(400).json({ error: 'Current password is incorrect' });
+    }
+
     // Hash new password
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
     // Update password
-    user.password = hashedPassword;
-    await user.save();
+    userWithPassword.password = hashedPassword;
+    await userWithPassword.save();
 
     res.status(200).json({ message: 'Password changed successfully' });
 

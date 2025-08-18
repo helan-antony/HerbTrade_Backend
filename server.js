@@ -44,27 +44,31 @@ app.use((req, res, next) => {
 // Connect to MongoDB
 const connectDB = async () => {
   try {
-    const conn = await mongoose.connect('mongodb://localhost:27017/herbtrade', {
+    const conn = await mongoose.connect(process.env.MONGODB_URI, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });
-    
+
     console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
     console.log(`📊 Database: ${conn.connection.name}`);
-    console.log(`🔗 Connection State: ${conn.connection.readyState === 1 ? 'Connected' : 'Disconnected'}`);
-    
+    console.log(
+      `🔗 Connection State: ${
+        conn.connection.readyState === 1 ? "Connected" : "Disconnected"
+      }`
+    );
+
     // List collections
     const collections = await conn.connection.db.listCollections().toArray();
-    console.log('📁 Available Collections:', collections.map(c => c.name));
-    
+    console.log("📁 Available Collections:", collections.map((c) => c.name));
   } catch (error) {
-    console.error('❌ MongoDB connection error:', error);
+    console.error("❌ MongoDB connection error:", error);
     process.exit(1);
   }
 };
 
 // Connect to database
 connectDB();
+
 
 // Routes - Enable essential routes
 console.log('Registering routes...');

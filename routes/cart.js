@@ -14,9 +14,20 @@ router.get('/', auth, async (req, res) => {
       await cart.save();
     }
 
+    // Calculate totals
+    const totalItems = cart.items.reduce((sum, item) => sum + item.quantity, 0);
+    const totalAmount = cart.items.reduce((sum, item) => {
+      const price = item.productId?.price || item.price || 0;
+      return sum + (price * item.quantity);
+    }, 0);
+
     res.json({
       success: true,
-      data: cart
+      data: {
+        ...cart.toObject(),
+        totalItems,
+        totalAmount
+      }
     });
   } catch (error) {
     console.error('Get cart error:', error);

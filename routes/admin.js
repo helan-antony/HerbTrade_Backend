@@ -844,7 +844,7 @@ router.put('/leaves/:id/status', auth, async (req, res) => {
 
     // Send email notification to seller
     try {
-      const transporter = nodemailer.createTransporter({
+      const transporter = nodemailer.createTransport({
         service: 'gmail',
         auth: {
           user: process.env.EMAIL_USER,
@@ -855,49 +855,78 @@ router.put('/leaves/:id/status', auth, async (req, res) => {
       const statusText = status === 'approved' ? 'Approved' : 'Rejected';
       const statusColor = status === 'approved' ? '#10B981' : '#EF4444';
 
-      const mailOptions = {
-        from: process.env.EMAIL_USER,
-        to: leave.seller.email,
-        subject: `Leave Application ${statusText} - HerbTrade`,
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <div style="background: linear-gradient(135deg, #10B981, #059669); padding: 30px; text-align: center;">
-              <h1 style="color: white; margin: 0;">HerbTrade</h1>
-              <p style="color: white; margin: 10px 0 0 0;">Leave Management System</p>
+      const emailHTML = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { font-family: 'Arial', sans-serif; background: #f8f6f0; margin: 0; padding: 20px; }
+            .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+            .header { background: linear-gradient(135deg, #10B981 0%, #059669 100%); color: white; padding: 40px 30px; text-align: center; }
+            .content { padding: 40px 30px; }
+            .status-badge { display: inline-block; padding: 8px 16px; border-radius: 20px; font-weight: bold; color: white; background: ${statusColor}; }
+            .details-box { background: #f8f9fa; padding: 20px; border-radius: 15px; margin: 20px 0; border-left: 5px solid ${statusColor}; }
+            .footer { background: #f8f6f0; padding: 20px; text-align: center; color: #666; }
+            .button { display: inline-block; background: linear-gradient(135deg, #10B981 0%, #059669 100%); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>🌿 HerbTrade AI</h1>
+              <p>Leave Management System</p>
             </div>
-            
-            <div style="padding: 30px; background: #f9f9f9;">
-              <h2 style="color: #333; margin-bottom: 20px;">Leave Application ${statusText}</h2>
-              
-              <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-                <p><strong>Dear ${leave.seller.name},</strong></p>
-                <p>Your leave application has been <span style="color: ${statusColor}; font-weight: bold;">${status.toUpperCase()}</span>.</p>
-                
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin: 20px 0;">
-                  <h3 style="margin: 0 0 10px 0; color: #333;">Leave Details:</h3>
-                  <p><strong>Type:</strong> ${leave.type.charAt(0).toUpperCase() + leave.type.slice(1)}</p>
-                  <p><strong>Dates:</strong> ${leave.startDate.toLocaleDateString()} - ${leave.endDate.toLocaleDateString()}</p>
-                  <p><strong>Reason:</strong> ${leave.reason}</p>
-                  ${adminComment ? `<p><strong>Admin Comment:</strong> ${adminComment}</p>` : ''}
-                </div>
-                
-                <p>If you have any questions, please contact the admin team.</p>
+            <div class="content">
+              <h2>Leave Application Update</h2>
+              <p><strong>Dear ${leave.seller.name},</strong></p>
+              <p>Your leave application has been:</p>
+              <div style="text-align: center; margin: 20px 0;">
+                <span class="status-badge">${status.toUpperCase()}</span>
               </div>
               
-              <div style="text-align: center; margin-top: 30px;">
-                <p style="color: #666; font-size: 14px;">
-                  This is an automated email from HerbTrade Leave Management System.
-                </p>
+              <div class="details-box">
+                <h3 style="margin: 0 0 15px 0; color: #333;">📋 Leave Details:</h3>
+                <p><strong>🏷️ Type:</strong> ${leave.type.charAt(0).toUpperCase() + leave.type.slice(1)}</p>
+                <p><strong>📅 Duration:</strong> ${leave.startDate.toLocaleDateString()} - ${leave.endDate.toLocaleDateString()}</p>
+                <p><strong>📝 Reason:</strong> ${leave.reason}</p>
+                <p><strong>📄 Description:</strong> ${leave.description}</p>
+                ${adminComment ? `<p><strong>💬 Admin Comment:</strong> ${adminComment}</p>` : ''}
+                <p><strong>⏰ Reviewed On:</strong> ${new Date().toLocaleDateString()}</p>
               </div>
+              
+              ${status === 'approved' ? 
+                '<p style="color: #10B981; font-weight: bold;">✅ Your leave has been approved. Please plan accordingly and ensure proper handover of your responsibilities.</p>' :
+                '<p style="color: #EF4444; font-weight: bold;">❌ Your leave application has been rejected. Please contact your supervisor for more details.</p>'
+              }
+              
+              <p>If you have any questions or need clarification, please contact the admin team or your supervisor.</p>
+              
+              <div style="text-align: center;">
+                <a href="${process.env.FRONTEND_URL || 'http://localhost:5174'}/seller-dashboard?tab=leaves" class="button">View Leave Status</a>
+              </div>
+            </div>
+            <div class="footer">
+              <p>© 2024 HerbTrade AI. All rights reserved.</p>
+              <p>This is an automated message, please do not reply.</p>
+              <p>📧 For support, contact: ${process.env.EMAIL_USER}</p>
             </div>
           </div>
-        `
+        </body>
+        </html>
+      `;
+
+      const mailOptions = {
+        from: `"HerbTrade AI Leave System" <${process.env.EMAIL_USER}>`,
+        to: leave.seller.email,
+        subject: `🌿 Leave Application ${statusText} - HerbTrade AI`,
+        html: emailHTML
       };
 
       await transporter.sendMail(mailOptions);
+      console.log(`✅ Leave ${status} email sent successfully to ${leave.seller.email}`);
     } catch (emailError) {
-      console.error('Error sending email notification:', emailError);
-      // Don't fail the request if email fails
+      console.error('❌ Error sending email notification:', emailError.message);
+      // Don't fail the request if email fails, but log the error
     }
 
     res.json({ 

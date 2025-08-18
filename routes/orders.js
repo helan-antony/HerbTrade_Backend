@@ -6,13 +6,18 @@ const router = express.Router();
 
 router.post('/', auth, async (req, res) => {
   try {
-    const { items, shippingAddress, paymentMethod, notes } = req.body;
+    const { items, shippingAddress, paymentMethod, notes, totalAmount: providedTotal } = req.body;
 
     if (!items || items.length === 0) {
       return res.status(400).json({ error: 'Order must contain at least one item' });
     }
 
-    let totalAmount = 0;
+    // Validate shipping address
+    if (!shippingAddress || !shippingAddress.fullName || !shippingAddress.address || !shippingAddress.phone) {
+      return res.status(400).json({ error: 'Complete shipping address is required' });
+    }
+
+    let calculatedTotal = 0;
     const orderItems = [];
 
     for (const item of items) {
@@ -22,11 +27,11 @@ router.post('/', auth, async (req, res) => {
       }
 
       if (product.inStock < item.quantity) {
-        return res.status(400).json({ error: `Insufficient stock for ${product.name}` });
+        return res.status(400).json({ error: `Insufficient stock for ${product.name}. Available: ${product.inStock}, Requested: ${item.quantity}` });
       }
 
       const itemTotal = product.price * item.quantity;
-      totalAmount += itemTotal;
+      calculatedTotal += itemTotal;
 
       orderItems.push({
         product: item.product,
@@ -34,21 +39,32 @@ router.post('/', auth, async (req, res) => {
         price: product.price
       });
 
+      // Update product stock
       product.inStock -= item.quantity;
       await product.save();
+    }
+
+    // Add tax (18%)
+    const finalTotal = calculatedTotal * 1.18;
+
+    // Validate total amount (allow small rounding differences)
+    if (providedTotal && Math.abs(finalTotal - providedTotal) > 0.01) {
+      console.warn(`Total amount mismatch: calculated ${finalTotal}, provided ${providedTotal}`);
     }
 
     const order = new Order({
       user: req.user.id,
       items: orderItems,
-      totalAmount,
+      totalAmount: providedTotal || finalTotal,
       shippingAddress,
       paymentMethod: paymentMethod || 'cod',
-      notes
+      notes: notes || '',
+      orderDate: new Date(),
+      status: 'pending'
     });
 
     await order.save();
-    await order.populate('items.product', 'name image');
+    await order.populate('items.product', 'name image category');
     await order.populate('user', 'name email phone');
 
     res.status(201).json(order);
