@@ -13,7 +13,7 @@ const leaveSchema = new mongoose.Schema({
   endDate: { type: Date, required: true },
   status: { 
     type: String, 
-    enum: ['pending', 'approved', 'rejected'], 
+    enum: ['pending', 'approved', 'rejected', 'cancelled'], 
     default: 'pending' 
   },
   adminComment: { type: String },

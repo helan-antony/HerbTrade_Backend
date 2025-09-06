@@ -11,6 +11,10 @@ const sellerSchema = new mongoose.Schema({
   isActive: { type: Boolean, default: true },
   isFirstLogin: { type: Boolean, default: true },
   lastLogin: { type: Date },
+  // Payroll settings
+  baseSalary: { type: Number, default: 0 }, // monthly base salary
+  paidLeavesPerMonth: { type: Number, default: 0 },
+  deductionMode: { type: String, enum: ['perDay'], default: 'perDay' },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Seller' },
   createdAt: { type: Date, default: Date.now }
 });

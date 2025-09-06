@@ -449,11 +449,45 @@ router.delete('/leaves/:id', auth, async (req, res) => {
       return res.status(400).json({ error: 'Cannot cancel leave application that has been reviewed' });
     }
 
-    await Leave.findByIdAndDelete(req.params.id);
-    res.json({ message: 'Leave application cancelled successfully' });
+    // Mark as cancelled instead of deleting to preserve history
+    leave.status = 'cancelled';
+    await leave.save();
+
+    res.json({ message: 'Leave application cancelled successfully', leave });
   } catch (error) {
     console.error('Error cancelling leave:', error);
     res.status(500).json({ error: 'Failed to cancel leave application' });
+  }
+});
+
+// Cancel an approved leave (before it starts)
+router.put('/leaves/:id/cancel', auth, async (req, res) => {
+  try {
+    if (!['seller', 'employee', 'manager', 'supervisor'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Access denied. Seller privileges required.' });
+    }
+
+    const leave = await Leave.findOne({ _id: req.params.id, seller: req.user._id });
+    if (!leave) {
+      return res.status(404).json({ error: 'Leave application not found' });
+    }
+
+    if (leave.status !== 'approved') {
+      return res.status(400).json({ error: 'Only approved leaves can be cancelled by the seller' });
+    }
+
+    const now = new Date();
+    if (now >= leave.startDate) {
+      return res.status(400).json({ error: 'Cannot cancel an approved leave on/after the start date' });
+    }
+
+    leave.status = 'cancelled';
+    await leave.save();
+
+    res.json({ message: 'Leave cancelled successfully', leave });
+  } catch (error) {
+    console.error('Error cancelling approved leave:', error);
+    res.status(500).json({ error: 'Failed to cancel approved leave' });
   }
 });
 
