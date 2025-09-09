@@ -14,6 +14,23 @@ router.get('/test', (req, res) => {
 
 // Nodemailer will be configured inside the route handlers
 
+// Check email availability across users and sellers
+router.get('/check-email', async (req, res) => {
+  try {
+    const { email } = req.query;
+    if (!email) {
+      return res.status(400).json({ available: false, error: 'Email is required' });
+    }
+    const existingUser = await User.findOne({ email });
+    const existingSeller = await Seller.findOne({ email });
+    const available = !(existingUser || existingSeller);
+    return res.json({ available });
+  } catch (err) {
+    console.error('Check email error:', err);
+    return res.status(500).json({ available: false, error: 'Server error' });
+  }
+});
+
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
   try {
@@ -87,7 +104,9 @@ router.post('/google-login', async (req, res) => {
         password: await bcrypt.hash(googleId, 10), // Use googleId as password hash
         profilePic: picture || '',
         externalLogin: 'google',
-        emailVerified: emailVerified || false,
+        emailVerified: !!emailVerified,
+        providerId: googleId,
+        app: 'herbtrade',
         role: 'user' // Default role
       });
       
@@ -108,6 +127,18 @@ router.post('/google-login', async (req, res) => {
       }
       if (!user.externalLogin) {
         user.externalLogin = 'google';
+        updated = true;
+      }
+      if (typeof user.emailVerified === 'undefined' && typeof emailVerified !== 'undefined') {
+        user.emailVerified = !!emailVerified;
+        updated = true;
+      }
+      if (!user.providerId && googleId) {
+        user.providerId = googleId;
+        updated = true;
+      }
+      if (!user.app) {
+        user.app = 'herbtrade';
         updated = true;
       }
       
@@ -278,22 +309,19 @@ router.post('/forgot-password', async (req, res) => {
     console.log('📧 Attempting to send email...');
 
     // Configure nodemailer transporter
+    const smtpUser = process.env.EMAIL_USER || 'helanantony03@gmail.com';
+    const smtpPass = process.env.EMAIL_PASS || 'vwwxdszgvdsztvze';
     const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
+      host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+      port: parseInt(process.env.EMAIL_PORT || '587', 10),
       secure: false,
-      auth: {
-        user: 'helanantony03@gmail.com',
-        pass: 'vwwxdszgvdsztvze'
-      },
-      tls: {
-        rejectUnauthorized: false
-      }
+      auth: { user: smtpUser, pass: smtpPass },
+      tls: { rejectUnauthorized: false }
     });
 
     // Email content
     const mailOptions = {
-      from: 'helanantony03@gmail.com',
+      from: smtpUser,
       to: email,
       subject: 'Password Reset - HerbTrade',
       html: `
@@ -351,6 +379,12 @@ router.post('/forgot-password', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Forgot password error:', error);
+    const msg = String(error?.message || '').toLowerCase();
+    if (msg.includes('daily user sending limit exceeded') || msg.includes('rate') || msg.includes('quota')) {
+      return res.status(429).json({
+        error: 'Email sending limit reached. Please try again later or contact support.'
+      });
+    }
     res.status(500).json({
       error: 'Failed to send reset email',
       details: error.message

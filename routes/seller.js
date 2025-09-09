@@ -102,7 +102,7 @@ router.get('/stats', auth, async (req, res) => {
     const totalProducts = products.length;
 
     res.json({
-      totalSales: totalSales.toFixed(2),
+      totalSales: Number(totalSales.toFixed(2)),
       totalProducts,
       activeProducts,
       totalOrders,

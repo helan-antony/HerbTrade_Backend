@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const nodemailer = require('nodemailer');
 const User = require('../models/User');
 const Seller = require('../models/Seller');
+const Order = require('../models/Order');
 const Cart = require('../models/Cart');
 const Wishlist = require('../models/Wishlist');
 const HospitalBooking = require('../models/HospitalBooking');
@@ -436,18 +437,26 @@ router.get('/stats', auth, async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    const [totalUsers, totalSellers, totalEmployees] = await Promise.all([
+    const [totalUsers, totalSellers, totalEmployees, orders] = await Promise.all([
       User.countDocuments({ role: 'user' }),
       Seller.countDocuments({ role: 'seller' }),
-      Seller.countDocuments({ role: { $in: ['employee', 'manager', 'supervisor'] } })
+      Seller.countDocuments({ role: { $in: ['employee', 'manager', 'supervisor'] } }),
+      Order.find({})
     ]);
     
+    const totalRevenue = orders.reduce((sum, ord) => sum + (Number(ord.totalAmount) || 0), 0);
+    const ordersToday = orders.filter(o => {
+      const d = new Date(o.orderDate || o.createdAt || 0);
+      const today = new Date();
+      return d.toDateString() === today.toDateString();
+    }).length;
+
     const stats = {
       totalUsers,
       totalSellers,
       totalEmployees,
-      totalRevenue: '125,000',
-      ordersToday: '45'
+      totalRevenue,
+      ordersToday
     };
 
     res.json(stats);
@@ -463,17 +472,18 @@ router.get('/orders', auth, async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    const orders = [
-      {
-        _id: '1',
-        orderNumber: 'ORD-001',
-        customer: 'John Doe',
-        total: 150,
-        status: 'Completed',
-        date: new Date()
-      }
-    ];
-    res.json(orders);
+    const orders = await Order.find({})
+      .populate('user', 'name email')
+      .sort({ orderDate: -1 });
+    const mapped = orders.map(o => ({
+      _id: o._id,
+      orderNumber: o._id.toString().slice(-6).toUpperCase(),
+      customer: o.user?.name || 'User',
+      total: o.totalAmount,
+      status: o.status,
+      date: o.orderDate || o.createdAt
+    }));
+    res.json(mapped);
   } catch (error) {
     console.error('Error fetching orders:', error);
     res.status(500).json({ error: 'Failed to fetch orders' });
@@ -592,6 +602,70 @@ router.patch('/hospital-bookings/:id/status', auth, async (req, res) => {
         success: false,
         message: 'Booking not found'
       });
+    }
+
+    // Send confirmation email if confirmed
+    if (bookingStatus === 'Confirmed') {
+      try {
+        const transporter = nodemailer.createTransport({
+          service: 'gmail',
+          auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS
+          }
+        });
+
+        const emailHTML = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <style>
+              body { font-family: 'Arial', sans-serif; background: #f8f6f0; margin: 0; padding: 20px; }
+              .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+              .header { background: linear-gradient(135deg, #10B981 0%, #059669 100%); color: white; padding: 30px; text-align: center; }
+              .content { padding: 30px; }
+              .details { background: #f8f9fa; padding: 20px; border-radius: 15px; margin: 20px 0; border-left: 5px solid #10B981; }
+              .footer { background: #f8f6f0; padding: 20px; text-align: center; color: #666; }
+              .button { display: inline-block; background: linear-gradient(135deg, #10B981 0%, #059669 100%); color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>🌿 HerbTrade</h1>
+                <p>Hospital Booking Confirmed</p>
+              </div>
+              <div class="content">
+                <p>Dear ${booking.userId?.name || 'User'},</p>
+                <p>Your hospital appointment has been <strong>confirmed</strong>. Here are the details:</p>
+                <div class="details">
+                  <p><strong>Hospital:</strong> ${booking.hospitalDetails?.name || 'N/A'}</p>
+                  <p><strong>Doctor:</strong> ${booking.appointmentDetails?.doctorName || 'N/A'}</p>
+                  <p><strong>Date:</strong> ${booking.appointmentDetails?.appointmentDate ? new Date(booking.appointmentDetails.appointmentDate).toLocaleDateString() : 'N/A'}</p>
+                  <p><strong>Time:</strong> ${booking.appointmentDetails?.appointmentTime || 'N/A'}</p>
+                </div>
+                <p>Please arrive 10 minutes early and bring any relevant medical records.</p>
+                <div style="text-align:center;">
+                  <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/view-bookings" class="button">View Booking</a>
+                </div>
+              </div>
+              <div class="footer">
+                <p>© 2024 HerbTrade. All rights reserved.</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `;
+
+        await transporter.sendMail({
+          from: process.env.EMAIL_USER,
+          to: booking.userId?.email,
+          subject: 'Your Hospital Booking is Confirmed - HerbTrade',
+          html: emailHTML
+        });
+      } catch (emailErr) {
+        console.error('Error sending booking confirmation email:', emailErr.message);
+      }
     }
 
     res.json({
@@ -844,13 +918,27 @@ router.put('/leaves/:id/status', auth, async (req, res) => {
 
     // Send email notification to seller
     try {
+      const smtpUser = process.env.EMAIL_USER || 'helanantony03@gmail.com';
+      const smtpPass = process.env.EMAIL_PASS || 'vwwxdszgvdsztvze';
       const transporter = nodemailer.createTransport({
-        service: 'gmail',
+        host: 'smtp.gmail.com',
+        port: 587,
+        secure: false,
         auth: {
-          user: process.env.EMAIL_USER,
-          pass: process.env.EMAIL_PASS
+          user: smtpUser,
+          pass: smtpPass
+        },
+        tls: {
+          rejectUnauthorized: false
         }
       });
+
+      try {
+        await transporter.verify();
+        console.log('SMTP ready for leave status emails');
+      } catch (verErr) {
+        console.error('SMTP verification failed for leave emails:', verErr.message);
+      }
 
       const statusText = status === 'approved' ? 'Approved' : 'Rejected';
       const statusColor = status === 'approved' ? '#10B981' : '#EF4444';
@@ -916,14 +1004,14 @@ router.put('/leaves/:id/status', auth, async (req, res) => {
       `;
 
       const mailOptions = {
-        from: `"HerbTrade AI Leave System" <${process.env.EMAIL_USER}>`,
+        from: smtpUser,
         to: leave.seller.email,
         subject: `🌿 Leave Application ${statusText} - HerbTrade AI`,
         html: emailHTML
       };
 
-      await transporter.sendMail(mailOptions);
-      console.log(`✅ Leave ${status} email sent successfully to ${leave.seller.email}`);
+      const info = await transporter.sendMail(mailOptions);
+      console.log(`✅ Leave ${status} email sent successfully to ${leave.seller.email} (messageId: ${info.messageId})`);
     } catch (emailError) {
       console.error('❌ Error sending email notification:', emailError.message);
       // Don't fail the request if email fails, but log the error
