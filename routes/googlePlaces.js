@@ -35,117 +35,9 @@ router.get('/search-hospitals/:place', async (req, res) => {
     // If no results from Google Places API, use mock data
     if (hospitals.length === 0) {
       console.log(`📝 Using mock data for ${place}`);
-      const mockHospitals = [
-      {
-        _id: `mock-${place}-1`,
-        name: `${place} Ayurvedic Hospital`,
-        address: `123 Main Street, ${place}`,
-        city: place,
-        state: 'Kerala',
-        pincode: '685508',
-        phone: '+91-9876543210',
-        email: `info@${place.toLowerCase()}ayurveda.com`,
-        website: `https://${place.toLowerCase()}ayurveda.com`,
-        rating: 4.5,
-        specialties: [
-          'Ayurvedic Medicine',
-          'Panchakarma',
-          'Herbal Medicine',
-          'Traditional Therapy',
-          'Yoga Therapy'
-        ],
-        doctors: [
-          {
-            name: 'Dr. Rajesh Sharma',
-            specialty: 'Panchakarma Specialist',
-            experience: 15,
-            qualification: 'BAMS, MD (Ayurveda)',
-            available: true
-          },
-          {
-            name: 'Dr. Priya Nair',
-            specialty: 'Ayurvedic Physician',
-            experience: 12,
-            qualification: 'BAMS, MD (Ayurveda)',
-            available: true
-          }
-        ],
-        location: {
-          type: 'Point',
-          coordinates: [76.8256, 9.5916] // Approximate coordinates for Kerala
-        },
-        facilities: [
-          'Panchakarma Treatment',
-          'Herbal Medicine',
-          'Yoga Therapy',
-          'Meditation Center',
-          'Ayurvedic Pharmacy'
-        ],
-        timings: [
-          'Monday: 9:00 AM – 6:00 PM',
-          'Tuesday: 9:00 AM – 6:00 PM',
-          'Wednesday: 9:00 AM – 6:00 PM',
-          'Thursday: 9:00 AM – 6:00 PM',
-          'Friday: 9:00 AM – 6:00 PM',
-          'Saturday: 9:00 AM – 2:00 PM',
-          'Sunday: Closed'
-        ],
-        isVerified: true,
-        googlePlaceId: `mock-place-${place}`,
-        googleRating: 4.5,
-        totalReviews: 89
-      },
-      {
-        _id: `mock-${place}-2`,
-        name: `${place} Traditional Medicine Center`,
-        address: `456 Wellness Road, ${place}`,
-        city: place,
-        state: 'Kerala',
-        pincode: '685509',
-        phone: '+91-9876543211',
-        email: `contact@${place.toLowerCase()}traditional.com`,
-        website: `https://${place.toLowerCase()}traditional.com`,
-        rating: 4.3,
-        specialties: [
-          'Traditional Therapy',
-          'Herbal Medicine',
-          'Ayurvedic Medicine',
-          'Massage Therapy'
-        ],
-        doctors: [
-          {
-            name: 'Dr. Suresh Kumar',
-            specialty: 'Traditional Healer',
-            experience: 20,
-            qualification: 'BAMS, PhD (Ayurveda)',
-            available: true
-          }
-        ],
-        location: {
-          type: 'Point',
-          coordinates: [76.8300, 9.5950]
-        },
-        facilities: [
-          'Traditional Therapy',
-          'Herbal Garden',
-          'Meditation Hall',
-          'Ayurvedic Spa'
-        ],
-        timings: [
-          'Monday: 8:00 AM – 7:00 PM',
-          'Tuesday: 8:00 AM – 7:00 PM',
-          'Wednesday: 8:00 AM – 7:00 PM',
-          'Thursday: 8:00 AM – 7:00 PM',
-          'Friday: 8:00 AM – 7:00 PM',
-          'Saturday: 8:00 AM – 5:00 PM',
-          'Sunday: 10:00 AM – 4:00 PM'
-        ],
-        isVerified: true,
-        googlePlaceId: `mock-place-${place}-2`,
-        googleRating: 4.3,
-        totalReviews: 67
-      }
-      ];
+      
+      // Get location-specific mock data
+      const mockHospitals = getLocationSpecificMockData(place);
       hospitals = mockHospitals;
     }
 
@@ -290,6 +182,14 @@ function transformToHospitalFormat(place, details) {
 function extractCity(address) {
   if (!address) return '';
   const parts = address.split(',');
+  
+  // Look for Kattappana specifically
+  const addressLower = address.toLowerCase();
+  if (addressLower.includes('kattappana')) {
+    return 'Kattappana';
+  }
+  
+  // Default extraction logic
   return parts.length >= 2 ? parts[parts.length - 3]?.trim() || '' : '';
 }
 
@@ -335,6 +235,272 @@ function generateAyurvedicDoctors() {
     qualification: 'BAMS, MD (Ayurveda)',
     available: Math.random() > 0.3
   }));
+}
+
+// Location-specific mock data
+function getLocationSpecificMockData(place) {
+  const normalizedPlace = place.toLowerCase().trim();
+  
+  // Kattappana specific data
+  if (normalizedPlace.includes('kattappana')) {
+    return [
+      {
+        _id: `kattappana-1`,
+        name: 'Kattappana Ayurvedic Hospital & Research Center',
+        address: 'Kattappana Main Road, Near Bus Stand, Kattappana',
+        city: 'Kattappana',
+        state: 'Kerala',
+        pincode: '685508',
+        phone: '+91-4869-222345',
+        email: 'info@kattappanaayurveda.com',
+        website: 'https://kattappanaayurveda.com',
+        rating: 4.6,
+        specialties: [
+          'Ayurvedic Medicine',
+          'Panchakarma',
+          'Herbal Medicine',
+          'Traditional Therapy',
+          'Yoga Therapy',
+          'Rehabilitation'
+        ],
+        doctors: [
+          {
+            name: 'Dr. Rajesh Kumar',
+            specialty: 'Panchakarma Specialist',
+            experience: 18,
+            qualification: 'BAMS, MD (Ayurveda), PhD',
+            available: true
+          },
+          {
+            name: 'Dr. Priya Menon',
+            specialty: 'Ayurvedic Physician',
+            experience: 15,
+            qualification: 'BAMS, MD (Ayurveda)',
+            available: true
+          },
+          {
+            name: 'Dr. Suresh Nair',
+            specialty: 'Herbal Medicine Expert',
+            experience: 12,
+            qualification: 'BAMS, MS (Ayurveda)',
+            available: true
+          }
+        ],
+        location: {
+          type: 'Point',
+          coordinates: [77.1234, 9.5678] // Kattappana Main Road coordinates (lng, lat)
+        },
+        facilities: [
+          'Panchakarma Treatment Center',
+          'Herbal Medicine Unit',
+          'Yoga & Meditation Hall',
+          'Physiotherapy Center',
+          'Ayurvedic Pharmacy',
+          'Research Laboratory',
+          'Patient Accommodation'
+        ],
+        timings: [
+          'Monday: 8:00 AM – 7:00 PM',
+          'Tuesday: 8:00 AM – 7:00 PM',
+          'Wednesday: 8:00 AM – 7:00 PM',
+          'Thursday: 8:00 AM – 7:00 PM',
+          'Friday: 8:00 AM – 7:00 PM',
+          'Saturday: 8:00 AM – 5:00 PM',
+          'Sunday: 9:00 AM – 2:00 PM'
+        ],
+        isVerified: true,
+        googlePlaceId: `kattappana-ayurvedic-hospital`,
+        googleRating: 4.6,
+        totalReviews: 124
+      },
+      {
+        _id: `kattappana-2`,
+        name: 'Idukki Ayurvedic Medical College & Hospital',
+        address: 'Thodupuzha Road, Kattappana, Idukki',
+        city: 'Kattappana',
+        state: 'Kerala',
+        pincode: '685508',
+        phone: '+91-4869-223456',
+        email: 'contact@idukkiayurveda.com',
+        website: 'https://idukkiayurveda.com',
+        rating: 4.4,
+        specialties: [
+          'Ayurvedic Medicine',
+          'Panchakarma',
+          'Herbal Medicine',
+          'Traditional Therapy',
+          'Medical Education',
+          'Research'
+        ],
+        doctors: [
+          {
+            name: 'Dr. Meera Devi',
+            specialty: 'Ayurvedic Professor',
+            experience: 25,
+            qualification: 'BAMS, MD (Ayurveda), PhD',
+            available: true
+          },
+          {
+            name: 'Dr. Ashok Kumar',
+            specialty: 'Panchakarma Expert',
+            experience: 20,
+            qualification: 'BAMS, MD (Ayurveda)',
+            available: true
+          }
+        ],
+        location: {
+          type: 'Point',
+          coordinates: [77.1300, 9.5700] // Thodupuzha Road coordinates (lng, lat)
+        },
+        facilities: [
+          'Medical College',
+          'Teaching Hospital',
+          'Panchakarma Center',
+          'Herbal Garden',
+          'Research Center',
+          'Library',
+          'Student Hostel'
+        ],
+        timings: [
+          'Monday: 8:00 AM – 6:00 PM',
+          'Tuesday: 8:00 AM – 6:00 PM',
+          'Wednesday: 8:00 AM – 6:00 PM',
+          'Thursday: 8:00 AM – 6:00 PM',
+          'Friday: 8:00 AM – 6:00 PM',
+          'Saturday: 8:00 AM – 4:00 PM',
+          'Sunday: Closed'
+        ],
+        isVerified: true,
+        googlePlaceId: `idukki-ayurvedic-medical-college`,
+        googleRating: 4.4,
+        totalReviews: 89
+      },
+      {
+        _id: `kattappana-3`,
+        name: 'Kattappana Traditional Healing Center',
+        address: 'Kumily Road, Near Railway Station, Kattappana',
+        city: 'Kattappana',
+        state: 'Kerala',
+        pincode: '685508',
+        phone: '+91-4869-224567',
+        email: 'healing@kattappanatrad.com',
+        website: 'https://kattappanatrad.com',
+        rating: 4.2,
+        specialties: [
+          'Traditional Healing',
+          'Herbal Medicine',
+          'Massage Therapy',
+          'Yoga Therapy',
+          'Meditation',
+          'Spiritual Healing'
+        ],
+        doctors: [
+          {
+            name: 'Dr. Lakshmi Devi',
+            specialty: 'Traditional Healer',
+            experience: 30,
+            qualification: 'Traditional Knowledge, BAMS',
+            available: true
+          },
+          {
+            name: 'Dr. Ravi Nair',
+            specialty: 'Yoga Therapist',
+            experience: 10,
+            qualification: 'Yoga Certification, BAMS',
+            available: true
+          }
+        ],
+        location: {
+          type: 'Point',
+          coordinates: [77.1200, 9.5650] // Kumily Road coordinates (lng, lat)
+        },
+        facilities: [
+          'Traditional Healing Room',
+          'Herbal Garden',
+          'Yoga Hall',
+          'Meditation Center',
+          'Massage Therapy Room',
+          'Herbal Medicine Shop'
+        ],
+        timings: [
+          'Monday: 7:00 AM – 8:00 PM',
+          'Tuesday: 7:00 AM – 8:00 PM',
+          'Wednesday: 7:00 AM – 8:00 PM',
+          'Thursday: 7:00 AM – 8:00 PM',
+          'Friday: 7:00 AM – 8:00 PM',
+          'Saturday: 7:00 AM – 6:00 PM',
+          'Sunday: 8:00 AM – 4:00 PM'
+        ],
+        isVerified: true,
+        googlePlaceId: `kattappana-traditional-healing`,
+        googleRating: 4.2,
+        totalReviews: 67
+      }
+    ];
+  }
+  
+  // Default mock data for other locations
+  return [
+    {
+      _id: `mock-${place}-1`,
+      name: `${place} Ayurvedic Hospital`,
+      address: `123 Main Street, ${place}`,
+      city: place,
+      state: 'Kerala',
+      pincode: '685508',
+      phone: '+91-9876543210',
+      email: `info@${place.toLowerCase()}ayurveda.com`,
+      website: `https://${place.toLowerCase()}ayurveda.com`,
+      rating: 4.5,
+      specialties: [
+        'Ayurvedic Medicine',
+        'Panchakarma',
+        'Herbal Medicine',
+        'Traditional Therapy',
+        'Yoga Therapy'
+      ],
+      doctors: [
+        {
+          name: 'Dr. Rajesh Sharma',
+          specialty: 'Panchakarma Specialist',
+          experience: 15,
+          qualification: 'BAMS, MD (Ayurveda)',
+          available: true
+        },
+        {
+          name: 'Dr. Priya Nair',
+          specialty: 'Ayurvedic Physician',
+          experience: 12,
+          qualification: 'BAMS, MD (Ayurveda)',
+          available: true
+        }
+      ],
+      location: {
+        type: 'Point',
+        coordinates: [76.8256, 9.5916]
+      },
+      facilities: [
+        'Panchakarma Treatment',
+        'Herbal Medicine',
+        'Yoga Therapy',
+        'Meditation Center',
+        'Ayurvedic Pharmacy'
+      ],
+      timings: [
+        'Monday: 9:00 AM – 6:00 PM',
+        'Tuesday: 9:00 AM – 6:00 PM',
+        'Wednesday: 9:00 AM – 6:00 PM',
+        'Thursday: 9:00 AM – 6:00 PM',
+        'Friday: 9:00 AM – 6:00 PM',
+        'Saturday: 9:00 AM – 2:00 PM',
+        'Sunday: Closed'
+      ],
+      isVerified: true,
+      googlePlaceId: `mock-place-${place}`,
+      googleRating: 4.5,
+      totalReviews: 89
+    }
+  ];
 }
 
 module.exports = router;
