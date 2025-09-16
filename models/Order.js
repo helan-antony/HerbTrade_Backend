@@ -10,9 +10,24 @@ const orderSchema = new mongoose.Schema({
   totalAmount: { type: Number, required: true },
   status: { 
     type: String, 
-    enum: ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'], 
+    enum: ['pending', 'confirmed', 'processing', 'shipped', 'out_for_delivery', 'delivered', 'cancelled'], 
     default: 'pending' 
   },
+  // Delivery assignment
+  deliveryAssignee: { type: mongoose.Schema.Types.ObjectId, ref: 'Seller' },
+  deliveryStatus: {
+    type: String,
+    enum: ['unassigned', 'assigned', 'picked_up', 'out_for_delivery', 'delivered', 'failed'],
+    default: 'unassigned'
+  },
+  deliveryNotes: String,
+  deliveryEvents: [
+    {
+      status: String,
+      message: String,
+      at: { type: Date, default: Date.now }
+    }
+  ],
   shippingAddress: {
     street: String,
     city: String,

@@ -6,7 +6,7 @@ const sellerSchema = new mongoose.Schema({
   phone: String,
   password: { type: String, required: true },
   profilePic: { type: String, default: '' },
-  role: { type: String, enum: ['seller', 'employee', 'manager', 'supervisor'], default: 'seller' },
+  role: { type: String, enum: ['seller', 'employee', 'manager', 'supervisor', 'delivery'], default: 'seller' },
   department: { type: String, default: '' },
   isActive: { type: Boolean, default: true },
   isFirstLogin: { type: Boolean, default: true },

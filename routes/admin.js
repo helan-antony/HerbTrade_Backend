@@ -159,13 +159,149 @@ router.get('/employees', auth, async (req, res) => {
     }
 
     const employees = await Seller.find({
-      role: { $in: ['employee', 'manager', 'supervisor'] }
+      role: { $in: ['employee', 'manager', 'supervisor', 'delivery'] }
     }).select('-password').sort({ createdAt: -1 });
 
     res.json(employees);
   } catch (error) {
     console.error('Error fetching employees:', error);
     res.status(500).json({ error: 'Failed to fetch employees' });
+  }
+});
+
+// Add delivery personnel (same flow as add-employee but role defaults to 'delivery')
+router.post('/add-delivery', auth, async (req, res) => {
+  try {
+    const { name, email } = req.body;
+    if (!name || !email) {
+      return res.status(400).json({ error: 'Name and email are required' });
+    }
+
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied. Admin privileges required.' });
+    }
+
+    const exists = await Seller.findOne({ email });
+    if (exists) return res.status(400).json({ error: 'User with this email already exists' });
+    const existsUser = await User.findOne({ email });
+    if (existsUser) return res.status(400).json({ error: 'Email already exists in the system' });
+
+    const password = generatePassword();
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const delivery = new Seller({
+      name: name.trim(),
+      email: email.toLowerCase().trim(),
+      password: hashedPassword,
+      role: 'delivery',
+      isActive: true,
+      createdBy: req.user._id,
+      createdAt: new Date()
+    });
+
+    const saved = await delivery.save();
+
+    try {
+      const emailHTML = `
+        <html><body>
+          <h2>Welcome to HerbTrade Delivery</h2>
+          <p>Your delivery account has been created.</p>
+          <p><b>Email:</b> ${email}</p>
+          <p><b>Password:</b> ${password}</p>
+          <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/login">Login</a>
+        </body></html>
+      `;
+
+      const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: process.env.EMAIL_USER || 'your-email@gmail.com',
+          pass: process.env.EMAIL_PASS || 'your-app-password'
+        }
+      });
+
+      await transporter.sendMail({
+        from: process.env.EMAIL_USER || 'noreply@herbtrade.com',
+        to: email,
+        subject: 'Your HerbTrade Delivery Account',
+        html: emailHTML
+      });
+    } catch (e) {
+      console.error('Email send failed (add-delivery):', e.message);
+    }
+
+    res.json({
+      success: true,
+      message: 'Delivery user added successfully',
+      delivery: {
+        id: saved._id,
+        name: saved.name,
+        email: saved.email,
+        role: saved.role,
+        isActive: saved.isActive,
+        createdAt: saved.createdAt
+      }
+    });
+  } catch (error) {
+    console.error('Error adding delivery user:', error);
+    res.status(500).json({ error: 'Failed to add delivery user', details: error.message });
+  }
+});
+
+// Assign an order to a delivery user
+router.post('/orders/:orderId/assign-delivery', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const { deliveryId } = req.body;
+    const order = await Order.findById(req.params.orderId);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+
+    const delivery = await Seller.findById(deliveryId);
+    if (!delivery || delivery.role !== 'delivery') {
+      return res.status(400).json({ error: 'Invalid delivery user' });
+    }
+
+    order.deliveryAssignee = delivery._id;
+    order.deliveryStatus = 'assigned';
+    order.deliveryEvents = order.deliveryEvents || [];
+    order.deliveryEvents.push({ status: 'assigned', message: `Assigned to ${delivery.name}` });
+    await order.save();
+
+    // Send assignment email to delivery person
+    try {
+      const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: process.env.EMAIL_USER || 'your-email@gmail.com',
+          pass: process.env.EMAIL_PASS || 'your-app-password'
+        }
+      });
+      const emailHTML = `
+        <html><body>
+          <h2>New Delivery Assigned</h2>
+          <p>Hi ${delivery.name}, a new order has been assigned to you.</p>
+          <p><b>Order:</b> #${String(order._id).slice(-6).toUpperCase()}</p>
+          <p><b>Status:</b> ${order.status}</p>
+          <p>Please check your Delivery Dashboard for details.</p>
+        </body></html>
+      `;
+      await transporter.sendMail({
+        from: process.env.EMAIL_USER || 'noreply@herbtrade.com',
+        to: delivery.email,
+        subject: 'New Delivery Assignment - HerbTrade',
+        html: emailHTML
+      });
+    } catch (e) {
+      console.error('Assignment email error:', e.message);
+    }
+
+    res.json({ message: 'Order assigned to delivery', order });
+  } catch (error) {
+    console.error('Error assigning delivery:', error);
+    res.status(500).json({ error: 'Failed to assign delivery' });
   }
 });
 
@@ -474,19 +610,68 @@ router.get('/orders', auth, async (req, res) => {
 
     const orders = await Order.find({})
       .populate('user', 'name email')
+      .populate('items.product', 'name')
+      .populate('deliveryAssignee', 'name email')
       .sort({ orderDate: -1 });
-    const mapped = orders.map(o => ({
-      _id: o._id,
-      orderNumber: o._id.toString().slice(-6).toUpperCase(),
-      customer: o.user?.name || 'User',
-      total: o.totalAmount,
-      status: o.status,
-      date: o.orderDate || o.createdAt
-    }));
-    res.json(mapped);
+    res.json(orders);
   } catch (error) {
     console.error('Error fetching orders:', error);
     res.status(500).json({ error: 'Failed to fetch orders' });
+  }
+});
+
+// List delivery users
+router.get('/deliveries', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    const deliveries = await Seller.find({ role: 'delivery' }).select('-password').sort({ createdAt: -1 });
+    res.json(deliveries);
+  } catch (error) {
+    console.error('Error fetching deliveries:', error);
+    res.status(500).json({ error: 'Failed to fetch deliveries' });
+  }
+});
+
+// Approve an order (set confirmed)
+router.patch('/orders/:orderId/approve', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    const order = await Order.findById(req.params.orderId);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    order.status = 'confirmed';
+    await order.save();
+    await order.populate('user', 'name email');
+    res.json({ message: 'Order approved', order });
+  } catch (error) {
+    console.error('Error approving order:', error);
+    res.status(500).json({ error: 'Failed to approve order' });
+  }
+});
+
+// Update order status (admin)
+router.patch('/orders/:orderId/status', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    const { status } = req.body;
+    const validStatuses = ['pending','confirmed','processing','shipped','out_for_delivery','delivered','cancelled'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ error: 'Invalid status' });
+    }
+    const order = await Order.findById(req.params.orderId);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    order.status = status;
+    if (status === 'delivered') order.deliveryDate = new Date();
+    await order.save();
+    res.json({ message: 'Status updated', order });
+  } catch (error) {
+    console.error('Error updating order status:', error);
+    res.status(500).json({ error: 'Failed to update order status' });
   }
 });
 
