@@ -26,6 +26,7 @@ const productSchema = new mongoose.Schema({
   licenseNumber: { type: String },
   
   seller: { type: mongoose.Schema.Types.ObjectId, ref: 'Seller', required: true },
+  geoIndication: { type: String, default: '' }, // e.g., Malabar Pepper, Darjeeling Tea
   ratings: [{
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     rating: { type: Number, min: 1, max: 5 },

@@ -83,7 +83,8 @@ router.post('/', auth, async (req, res) => {
       name, description, price, image, category, uses, quality, inStock, grade, quantityUnit,
       // Medicine-specific fields
       dosageForm, strength, activeIngredients, indications, dosage, contraindications, 
-      sideEffects, expiryDate, batchNumber, manufacturer, licenseNumber
+      sideEffects, expiryDate, batchNumber, manufacturer, licenseNumber,
+      geoIndication
     } = req.body;
 
     if (!name || !description || !price || !image || !category) {
@@ -119,6 +120,9 @@ router.post('/', auth, async (req, res) => {
       productData.licenseNumber = licenseNumber;
     }
 
+    // GI
+    if (geoIndication) productData.geoIndication = String(geoIndication).trim();
+
     const product = new Product(productData);
 
     await product.save();
@@ -128,6 +132,31 @@ router.post('/', auth, async (req, res) => {
   } catch (error) {
     console.error('Error creating product:', error);
     res.status(500).json({ error: 'Failed to create product' });
+  }
+});
+
+// Update product (partial)
+router.put('/:id', auth, async (req, res) => {
+  try {
+    const product = await Product.findOne({ _id: req.params.id, seller: req.user.id });
+    if (!product) return res.status(404).json({ error: 'Product not found' });
+
+    const updatable = ['name','description','price','image','category','uses','quality','inStock','grade','quantityUnit','geoIndication'];
+    updatable.forEach(k => {
+      if (req.body[k] !== undefined) product[k] = req.body[k];
+    });
+
+    if ((req.body.category === 'Medicines') || product.category === 'Medicines') {
+      const med = ['dosageForm','strength','activeIngredients','indications','dosage','contraindications','sideEffects','expiryDate','batchNumber','manufacturer','licenseNumber'];
+      med.forEach(k => { if (req.body[k] !== undefined) product[k] = req.body[k]; });
+    }
+
+    await product.save();
+    await product.populate('seller','name email');
+    res.json(product);
+  } catch (error) {
+    console.error('Error updating product:', error);
+    res.status(500).json({ error: 'Failed to update product' });
   }
 });
 
