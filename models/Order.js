@@ -33,7 +33,14 @@ const orderSchema = new mongoose.Schema({
     city: String,
     state: String,
     zipCode: String,
-    country: String
+    country: String,
+    fullName: String,
+    address: String,
+    phone: String
+  },
+  deliveryLocation: {
+    type: { type: String, enum: ['Point'], default: 'Point' },
+    coordinates: { type: [Number], default: [0, 0] } // [longitude, latitude]
   },
   paymentMethod: { type: String, enum: ['cod', 'online'], default: 'cod' },
   paymentStatus: { type: String, enum: ['pending', 'paid', 'failed'], default: 'pending' },
@@ -42,5 +49,8 @@ const orderSchema = new mongoose.Schema({
   trackingNumber: String,
   notes: String
 });
+
+// Add geospatial index for delivery location queries
+orderSchema.index({ deliveryLocation: '2dsphere' });
 
 module.exports = mongoose.model('Order', orderSchema);

@@ -25,7 +25,7 @@ function generatePassword() {
 
 router.post('/add-employee', auth, async (req, res) => {
   try {
-    const { name, email, role, department } = req.body;
+    const { name, email, role, department, currentLocation, maxDeliveryRadius, vehicleType, licenseNumber } = req.body;
     
     if (!name || !email) {
       return res.status(400).json({ error: 'Name and email are required' });
@@ -49,7 +49,7 @@ router.post('/add-employee', auth, async (req, res) => {
     const password = generatePassword();
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const employee = new Seller({
+    const employeeData = {
       name: name.trim(),
       email: email.toLowerCase().trim(),
       password: hashedPassword,
@@ -58,7 +58,20 @@ router.post('/add-employee', auth, async (req, res) => {
       isActive: true,
       createdBy: adminUser._id,
       createdAt: new Date()
-    });
+    };
+
+    // Add location-specific fields for delivery agents
+    if (role === 'delivery') {
+      if (currentLocation) {
+        employeeData.currentLocation = currentLocation;
+      }
+      employeeData.maxDeliveryRadius = maxDeliveryRadius || 10;
+      employeeData.vehicleType = vehicleType || 'bike';
+      employeeData.licenseNumber = licenseNumber || '';
+      employeeData.isAvailable = true;
+    }
+
+    const employee = new Seller(employeeData);
 
     const savedEmployee = await employee.save();
 
@@ -248,6 +261,161 @@ router.post('/add-delivery', auth, async (req, res) => {
   }
 });
 
+// Helper function to calculate distance between two coordinates
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371; // Earth's radius in kilometers
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
+// Get nearest available delivery agents for an order
+router.get('/orders/:orderId/nearest-deliveries', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const order = await Order.findById(req.params.orderId);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+
+    if (!order.deliveryLocation || !order.deliveryLocation.coordinates) {
+      return res.status(400).json({ error: 'Order delivery location not set' });
+    }
+
+    const [orderLon, orderLat] = order.deliveryLocation.coordinates;
+
+    // Find all available delivery agents
+    const deliveries = await Seller.find({ 
+      role: 'delivery', 
+      isActive: true, 
+      isAvailable: true 
+    });
+
+    // Calculate distances and sort by proximity
+    const deliveriesWithDistance = deliveries.map(delivery => {
+      const [deliveryLon, deliveryLat] = delivery.currentLocation.coordinates;
+      const distance = calculateDistance(orderLat, orderLon, deliveryLat, deliveryLon);
+      
+      return {
+        ...delivery.toObject(),
+        distance: Math.round(distance * 100) / 100, // Round to 2 decimal places
+        isInServiceArea: delivery.maxDeliveryRadius >= distance
+      };
+    });
+
+    // Sort by distance and filter by service area
+    const sortedDeliveries = deliveriesWithDistance
+      .filter(d => d.isInServiceArea)
+      .sort((a, b) => a.distance - b.distance);
+
+    res.json(sortedDeliveries);
+  } catch (error) {
+    console.error('Error finding nearest deliveries:', error);
+    res.status(500).json({ error: 'Failed to find nearest delivery agents' });
+  }
+});
+
+// Auto-assign order to nearest available delivery agent
+router.post('/orders/:orderId/auto-assign-delivery', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const order = await Order.findById(req.params.orderId);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+
+    if (order.deliveryAssignee) {
+      return res.status(400).json({ error: 'Order already assigned' });
+    }
+
+    if (!order.deliveryLocation || !order.deliveryLocation.coordinates) {
+      return res.status(400).json({ error: 'Order delivery location not set' });
+    }
+
+    const [orderLon, orderLat] = order.deliveryLocation.coordinates;
+
+    // Find nearest available delivery agent
+    const deliveries = await Seller.find({ 
+      role: 'delivery', 
+      isActive: true, 
+      isAvailable: true 
+    });
+
+    let nearestDelivery = null;
+    let minDistance = Infinity;
+
+    for (const delivery of deliveries) {
+      const [deliveryLon, deliveryLat] = delivery.currentLocation.coordinates;
+      const distance = calculateDistance(orderLat, orderLon, deliveryLat, deliveryLon);
+      
+      if (distance <= delivery.maxDeliveryRadius && distance < minDistance) {
+        minDistance = distance;
+        nearestDelivery = delivery;
+      }
+    }
+
+    if (!nearestDelivery) {
+      return res.status(404).json({ error: 'No available delivery agent found in service area' });
+    }
+
+    // Assign the order
+    order.deliveryAssignee = nearestDelivery._id;
+    order.deliveryStatus = 'assigned';
+    order.status = 'confirmed'; // Auto-confirm order when delivery agent is assigned
+    order.deliveryEvents = order.deliveryEvents || [];
+    order.deliveryEvents.push({ 
+      status: 'assigned', 
+      message: `Auto-assigned to ${nearestDelivery.name} (${minDistance.toFixed(2)} km away)` 
+    });
+    await order.save();
+
+    // Send assignment email
+    try {
+      const transporter = nodemailer.createTransporter({
+        service: 'gmail',
+        auth: {
+          user: process.env.EMAIL_USER || 'your-email@gmail.com',
+          pass: process.env.EMAIL_PASS || 'your-app-password'
+        }
+      });
+      const emailHTML = `
+        <html><body>
+          <h2>New Delivery Auto-Assigned</h2>
+          <p>Hi ${nearestDelivery.name}, a new order has been automatically assigned to you.</p>
+          <p><b>Order:</b> #${String(order._id).slice(-6).toUpperCase()}</p>
+          <p><b>Distance:</b> ${minDistance.toFixed(2)} km</p>
+          <p><b>Status:</b> ${order.status}</p>
+          <p>Please check your Delivery Dashboard for details.</p>
+        </body></html>
+      `;
+      await transporter.sendMail({
+        from: process.env.EMAIL_USER || 'noreply@herbtrade.com',
+        to: nearestDelivery.email,
+        subject: 'New Delivery Auto-Assignment - HerbTrade',
+        html: emailHTML
+      });
+    } catch (e) {
+      console.error('Assignment email error:', e.message);
+    }
+
+    res.json({ 
+      message: 'Order auto-assigned successfully', 
+      delivery: nearestDelivery,
+      distance: minDistance,
+      order 
+    });
+  } catch (error) {
+    console.error('Error auto-assigning delivery:', error);
+    res.status(500).json({ error: 'Failed to auto-assign delivery' });
+  }
+});
+
 // Assign an order to a delivery user
 router.post('/orders/:orderId/assign-delivery', auth, async (req, res) => {
   try {
@@ -264,10 +432,23 @@ router.post('/orders/:orderId/assign-delivery', auth, async (req, res) => {
       return res.status(400).json({ error: 'Invalid delivery user' });
     }
 
+    // Calculate distance if both locations are available
+    let distance = null;
+    if (order.deliveryLocation && order.deliveryLocation.coordinates && 
+        delivery.currentLocation && delivery.currentLocation.coordinates) {
+      const [orderLon, orderLat] = order.deliveryLocation.coordinates;
+      const [deliveryLon, deliveryLat] = delivery.currentLocation.coordinates;
+      distance = calculateDistance(orderLat, orderLon, deliveryLat, deliveryLon);
+    }
+
     order.deliveryAssignee = delivery._id;
     order.deliveryStatus = 'assigned';
+    order.status = 'confirmed'; // Auto-confirm order when delivery agent is assigned
     order.deliveryEvents = order.deliveryEvents || [];
-    order.deliveryEvents.push({ status: 'assigned', message: `Assigned to ${delivery.name}` });
+    order.deliveryEvents.push({ 
+      status: 'assigned', 
+      message: `Assigned to ${delivery.name}${distance ? ` (${distance.toFixed(2)} km away)` : ''}` 
+    });
     await order.save();
 
     // Send assignment email to delivery person
@@ -1249,6 +1430,94 @@ router.get('/leaves/stats', auth, async (req, res) => {
   } catch (error) {
     console.error('Error fetching leave stats:', error);
     res.status(500).json({ error: 'Failed to fetch leave statistics' });
+  }
+});
+
+// Update delivery agent location
+router.put('/deliveries/:deliveryId/location', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const { latitude, longitude, serviceAreas, maxDeliveryRadius, vehicleType, licenseNumber } = req.body;
+    
+    const delivery = await Seller.findById(req.params.deliveryId);
+    if (!delivery || delivery.role !== 'delivery') {
+      return res.status(404).json({ error: 'Delivery agent not found' });
+    }
+
+    if (latitude && longitude) {
+      delivery.currentLocation = {
+        type: 'Point',
+        coordinates: [longitude, latitude]
+      };
+    }
+
+    if (serviceAreas) {
+      delivery.serviceAreas = serviceAreas;
+    }
+
+    if (maxDeliveryRadius) {
+      delivery.maxDeliveryRadius = maxDeliveryRadius;
+    }
+
+    if (vehicleType) {
+      delivery.vehicleType = vehicleType;
+    }
+
+    if (licenseNumber) {
+      delivery.licenseNumber = licenseNumber;
+    }
+
+    await delivery.save();
+
+    res.json({ 
+      message: 'Delivery agent location updated successfully', 
+      delivery: {
+        id: delivery._id,
+        name: delivery.name,
+        currentLocation: delivery.currentLocation,
+        serviceAreas: delivery.serviceAreas,
+        maxDeliveryRadius: delivery.maxDeliveryRadius,
+        vehicleType: delivery.vehicleType,
+        licenseNumber: delivery.licenseNumber
+      }
+    });
+  } catch (error) {
+    console.error('Error updating delivery location:', error);
+    res.status(500).json({ error: 'Failed to update delivery location' });
+  }
+});
+
+// Toggle delivery agent availability
+router.put('/deliveries/:deliveryId/availability', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const delivery = await Seller.findById(req.params.deliveryId);
+    if (!delivery || delivery.role !== 'delivery') {
+      return res.status(404).json({ error: 'Delivery agent not found' });
+    }
+
+    delivery.isAvailable = !delivery.isAvailable;
+    await delivery.save();
+
+    res.json({
+      success: true,
+      message: `Delivery agent ${delivery.isAvailable ? 'marked as available' : 'marked as unavailable'}`,
+      delivery: {
+        id: delivery._id,
+        name: delivery.name,
+        email: delivery.email,
+        isAvailable: delivery.isAvailable
+      }
+    });
+  } catch (error) {
+    console.error('Error toggling delivery availability:', error);
+    res.status(500).json({ error: 'Failed to toggle delivery availability' });
   }
 });
 

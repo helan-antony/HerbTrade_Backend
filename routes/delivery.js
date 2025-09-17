@@ -95,9 +95,16 @@ router.put('/orders/:id/status', auth, async (req, res) => {
     order.deliveryEvents = order.deliveryEvents || [];
     order.deliveryEvents.push({ status, message: note || '' });
 
-    if (status === 'delivered') {
+    // Update main order status based on delivery status (e-commerce workflow)
+    if (status === 'picked_up') {
+      order.status = 'processing';
+    } else if (status === 'out_for_delivery') {
+      order.status = 'shipped';
+    } else if (status === 'delivered') {
       order.status = 'delivered';
       order.deliveryDate = new Date();
+    } else if (status === 'failed') {
+      order.status = 'processing'; // Keep as processing for retry
     }
 
     await order.save();
@@ -106,6 +113,59 @@ router.put('/orders/:id/status', auth, async (req, res) => {
   } catch (error) {
     console.error('Error updating delivery status:', error);
     res.status(500).json({ error: 'Failed to update delivery status' });
+  }
+});
+
+// Update delivery location
+router.put('/location', auth, async (req, res) => {
+  try {
+    if (!assertDeliveryRole(req, res)) return;
+
+    const { latitude, longitude } = req.body;
+    
+    if (!latitude || !longitude) {
+      return res.status(400).json({ error: 'Latitude and longitude are required' });
+    }
+
+    const delivery = await Seller.findById(req.user._id);
+    if (!delivery) return res.status(404).json({ error: 'User not found' });
+
+    delivery.currentLocation = {
+      type: 'Point',
+      coordinates: [longitude, latitude]
+    };
+
+    await delivery.save();
+
+    res.json({ 
+      message: 'Location updated successfully', 
+      location: delivery.currentLocation
+    });
+  } catch (error) {
+    console.error('Error updating location:', error);
+    res.status(500).json({ error: 'Failed to update location' });
+  }
+});
+
+// Toggle availability status
+router.put('/availability', auth, async (req, res) => {
+  try {
+    if (!assertDeliveryRole(req, res)) return;
+
+    const delivery = await Seller.findById(req.user._id);
+    if (!delivery) return res.status(404).json({ error: 'User not found' });
+
+    delivery.isAvailable = !delivery.isAvailable;
+    await delivery.save();
+
+    res.json({
+      success: true,
+      message: `You are now ${delivery.isAvailable ? 'available' : 'unavailable'} for deliveries`,
+      isAvailable: delivery.isAvailable
+    });
+  } catch (error) {
+    console.error('Error toggling availability:', error);
+    res.status(500).json({ error: 'Failed to toggle availability' });
   }
 });
 
@@ -122,6 +182,11 @@ router.get('/profile', auth, async (req, res) => {
       profilePic: req.user.profilePic,
       role: req.user.role,
       isActive: req.user.isActive,
+      isAvailable: req.user.isAvailable,
+      currentLocation: req.user.currentLocation,
+      maxDeliveryRadius: req.user.maxDeliveryRadius,
+      vehicleType: req.user.vehicleType,
+      licenseNumber: req.user.licenseNumber,
       createdAt: req.user.createdAt
     });
   } catch (error) {
