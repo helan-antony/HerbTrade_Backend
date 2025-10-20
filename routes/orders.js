@@ -20,10 +20,14 @@ router.post('/', auth, async (req, res) => {
     let calculatedTotal = 0;
     const orderItems = [];
 
+    // Validate items and calculate total
     for (const item of items) {
-      const product = await Product.findById(item.product);
+      // Handle both formats: {product, quantity} and {product: {_id, price, ...}, quantity}
+      const productId = item.product && typeof item.product === 'object' ? item.product._id : item.product;
+      const product = await Product.findById(productId);
+      
       if (!product) {
-        return res.status(400).json({ error: `Product ${item.product} not found` });
+        return res.status(400).json({ error: `Product ${productId} not found` });
       }
 
       if (product.inStock < item.quantity) {
@@ -34,7 +38,7 @@ router.post('/', auth, async (req, res) => {
       calculatedTotal += itemTotal;
 
       orderItems.push({
-        product: item.product,
+        product: product._id,
         quantity: item.quantity,
         price: product.price
       });
@@ -48,8 +52,9 @@ router.post('/', auth, async (req, res) => {
     const finalTotal = calculatedTotal * 1.18;
 
     // Validate total amount (allow small rounding differences)
-    if (providedTotal && Math.abs(finalTotal - providedTotal) > 0.01) {
+    if (providedTotal && Math.abs(finalTotal - providedTotal) > 1) {
       console.warn(`Total amount mismatch: calculated ${finalTotal}, provided ${providedTotal}`);
+      return res.status(400).json({ error: `Total amount mismatch. Calculated: ₹${finalTotal.toFixed(2)}, Provided: ₹${providedTotal.toFixed(2)}` });
     }
 
     const order = new Order({
@@ -58,6 +63,7 @@ router.post('/', auth, async (req, res) => {
       totalAmount: providedTotal || finalTotal,
       shippingAddress,
       paymentMethod: paymentMethod || 'cod',
+      paymentStatus: paymentMethod === 'online' ? 'paid' : 'pending',
       notes: notes || '',
       orderDate: new Date(),
       status: 'pending'
@@ -67,10 +73,14 @@ router.post('/', auth, async (req, res) => {
     await order.populate('items.product', 'name image category');
     await order.populate('user', 'name email phone');
 
-    res.status(201).json(order);
+    res.status(201).json({
+      success: true,
+      message: 'Order created successfully',
+      order
+    });
   } catch (error) {
     console.error('Error creating order:', error);
-    res.status(500).json({ error: 'Failed to create order' });
+    res.status(500).json({ error: 'Failed to create order', details: error.message });
   }
 });
 

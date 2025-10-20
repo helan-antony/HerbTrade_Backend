@@ -10,7 +10,7 @@ module.exports = async (req, res, next) => {
   }
 
   try {
-    const decoded = jwt.verify(token, 'your-secret-key');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
     
     let user;
     if (decoded.collection === 'sellers') {

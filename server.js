@@ -21,7 +21,7 @@ const googlePlacesRoutes = require('./routes/googlePlaces');
 const User = require('./models/User');
 const bcrypt = require('bcryptjs');
 
-dotenv.config();
+dotenv.config({ path: __dirname + '/.env' });
 
 const app = express();
 
@@ -45,6 +45,13 @@ app.use((req, res, next) => {
 // Connect to MongoDB
 const connectDB = async () => {
   try {
+    console.log('🔍 Attempting to connect to MongoDB...');
+    console.log('🔗 MONGODB_URI:', process.env.MONGODB_URI ? 'URI is set' : 'URI is undefined');
+    
+    if (!process.env.MONGODB_URI) {
+      throw new Error('MONGODB_URI is not defined in environment variables');
+    }
+    
     const conn = await mongoose.connect(process.env.MONGODB_URI, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
@@ -63,6 +70,10 @@ const connectDB = async () => {
     console.log("📁 Available Collections:", collections.map((c) => c.name));
   } catch (error) {
     console.error("❌ MongoDB connection error:", error);
+    console.error("🔧 Environment variables:", {
+      MONGODB_URI: process.env.MONGODB_URI ? '***REDACTED***' : 'NOT SET',
+      NODE_ENV: process.env.NODE_ENV
+    });
     process.exit(1);
   }
 };

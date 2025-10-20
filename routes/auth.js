@@ -57,7 +57,7 @@ router.post('/login', async (req, res) => {
         role: user.role,
         collection: isFromSellerCollection ? 'sellers' : 'users'
       }, 
-      'your-secret-key', 
+      process.env.JWT_SECRET || 'your-secret-key', 
       { expiresIn: '24h' }
     );
     
@@ -155,7 +155,7 @@ router.post('/google-login', async (req, res) => {
         role: user.role, 
         collection: 'users' 
       }, 
-      'your-secret-key', 
+      process.env.JWT_SECRET || 'your-secret-key', 
       { expiresIn: '24h' }
     );
 
@@ -191,7 +191,7 @@ router.post('/register', async (req, res) => {
     const hash = await bcrypt.hash(password, 10);
     const user = new User({ name, email, phone, password: hash, profilePic });
     await user.save();
-    const token = jwt.sign({ id: user._id, role: user.role, collection: 'users' }, 'your-secret-key', { expiresIn: '24h' });
+    const token = jwt.sign({ id: user._id, role: user.role, collection: 'users' }, process.env.JWT_SECRET || 'your-secret-key', { expiresIn: '24h' });
     res.status(201).json({ token, user: { id: user._id, name: user.name, email: user.email, role: user.role, profilePic: user.profilePic } });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -299,7 +299,7 @@ router.post('/forgot-password', async (req, res) => {
         email: user.email,
         collection: isFromSellerCollection ? 'sellers' : 'users'
       },
-      'your-secret-key',
+      process.env.JWT_SECRET || 'your-secret-key',
       { expiresIn: '1h' }
     );
 
@@ -398,7 +398,7 @@ router.post('/reset-password', async (req, res) => {
 
   try {
     // Verify token
-    const decoded = jwt.verify(token, 'your-secret-key');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
 
     // Find user based on collection info from token
     let user;
