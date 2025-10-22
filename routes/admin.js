@@ -789,11 +789,14 @@ router.get('/orders', auth, async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
+    // Fetch all orders including cancelled ones
     const orders = await Order.find({})
       .populate('user', 'name email')
       .populate('items.product', 'name')
       .populate('deliveryAssignee', 'name email')
       .sort({ orderDate: -1 });
+    
+    console.log(`Admin orders fetch: Found ${orders.length} orders`);
     res.json(orders);
   } catch (error) {
     console.error('Error fetching orders:', error);

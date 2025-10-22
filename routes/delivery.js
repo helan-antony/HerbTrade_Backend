@@ -36,7 +36,8 @@ router.get('/orders/available', auth, async (req, res) => {
   try {
     if (!assertDeliveryRole(req, res)) return;
 
-    const orders = await Order.find({})
+    // Only fetch unassigned orders
+    const orders = await Order.find({ deliveryAssignee: { $exists: false } })
       .populate('user', 'name email')
       .populate('items.product', 'name price image')
       .sort({ orderDate: -1 });

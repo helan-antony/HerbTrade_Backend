@@ -337,7 +337,12 @@ router.post('/change-password', auth, async (req, res) => {
 // Get seller's leave applications
 router.get('/leaves', auth, async (req, res) => {
   try {
-    if (!['seller', 'employee', 'manager', 'supervisor'].includes(req.user.role)) {
+    console.log('Leave GET endpoint hit');
+    console.log('User role:', req.user.role);
+    console.log('Allowed roles check:', ['seller', 'employee', 'manager', 'supervisor', 'delivery'].includes(req.user.role));
+    
+    if (!['seller', 'employee', 'manager', 'supervisor', 'delivery'].includes(req.user.role)) {
+      console.log('Access denied - role not in allowed list');
       return res.status(403).json({ error: 'Access denied. Seller privileges required.' });
     }
 
@@ -355,7 +360,12 @@ router.get('/leaves', auth, async (req, res) => {
 // Apply for leave
 router.post('/leaves', auth, async (req, res) => {
   try {
-    if (!['seller', 'employee', 'manager', 'supervisor'].includes(req.user.role)) {
+    console.log('Leave POST endpoint hit');
+    console.log('User role:', req.user.role);
+    console.log('Allowed roles check:', ['seller', 'employee', 'manager', 'supervisor', 'delivery'].includes(req.user.role));
+    
+    if (!['seller', 'employee', 'manager', 'supervisor', 'delivery'].includes(req.user.role)) {
+      console.log('Access denied - role not in allowed list');
       return res.status(403).json({ error: 'Access denied. Seller privileges required.' });
     }
 
@@ -404,7 +414,7 @@ router.post('/leaves', auth, async (req, res) => {
 // Update leave application (only pending leaves)
 router.put('/leaves/:id', auth, async (req, res) => {
   try {
-    if (!['seller', 'employee', 'manager', 'supervisor'].includes(req.user.role)) {
+    if (!['seller', 'employee', 'manager', 'supervisor', 'delivery'].includes(req.user.role)) {
       return res.status(403).json({ error: 'Access denied. Seller privileges required.' });
     }
 
@@ -436,7 +446,7 @@ router.put('/leaves/:id', auth, async (req, res) => {
 // Cancel leave application (only pending leaves)
 router.delete('/leaves/:id', auth, async (req, res) => {
   try {
-    if (!['seller', 'employee', 'manager', 'supervisor'].includes(req.user.role)) {
+    if (!['seller', 'employee', 'manager', 'supervisor', 'delivery'].includes(req.user.role)) {
       return res.status(403).json({ error: 'Access denied. Seller privileges required.' });
     }
 
@@ -463,7 +473,7 @@ router.delete('/leaves/:id', auth, async (req, res) => {
 // Cancel an approved leave (before it starts)
 router.put('/leaves/:id/cancel', auth, async (req, res) => {
   try {
-    if (!['seller', 'employee', 'manager', 'supervisor'].includes(req.user.role)) {
+    if (!['seller', 'employee', 'manager', 'supervisor', 'delivery'].includes(req.user.role)) {
       return res.status(403).json({ error: 'Access denied. Seller privileges required.' });
     }
 
