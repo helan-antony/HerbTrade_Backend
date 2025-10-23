@@ -73,10 +73,12 @@ router.post('/', auth, async (req, res) => {
     await order.populate('items.product', 'name image category');
     await order.populate('user', 'name email phone');
 
+    // Return the order ID for frontend navigation
     res.status(201).json({
       success: true,
       message: 'Order created successfully',
-      order
+      orderId: order._id,
+      order: order.toObject()
     });
   } catch (error) {
     console.error('Error creating order:', error);
