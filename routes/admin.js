@@ -26,7 +26,7 @@ function generatePassword() {
 router.post('/add-employee', auth, async (req, res) => {
   try {
     const { name, email, role, department, currentLocation, maxDeliveryRadius, vehicleType, licenseNumber } = req.body;
-    
+
     if (!name || !email) {
       return res.status(400).json({ error: 'Name and email are required' });
     }
@@ -142,8 +142,8 @@ router.post('/add-employee', auth, async (req, res) => {
       console.error('Email sending failed:', emailError.message);
     }
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       message: 'Employee added successfully to sellers collection',
       employee: {
         id: savedEmployee._id,
@@ -158,8 +158,8 @@ router.post('/add-employee', auth, async (req, res) => {
 
   } catch (error) {
     console.error('Error adding employee:', error);
-    res.status(500).json({ 
-      error: 'Failed to add employee', 
+    res.status(500).json({
+      error: 'Failed to add employee',
       details: error.message
     });
   }
@@ -266,10 +266,10 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
   const R = 6371; // Earth's radius in kilometers
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLon/2) * Math.sin(dLon/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
 
@@ -290,17 +290,17 @@ router.get('/orders/:orderId/nearest-deliveries', auth, async (req, res) => {
     const [orderLon, orderLat] = order.deliveryLocation.coordinates;
 
     // Find all available delivery agents
-    const deliveries = await Seller.find({ 
-      role: 'delivery', 
-      isActive: true, 
-      isAvailable: true 
+    const deliveries = await Seller.find({
+      role: 'delivery',
+      isActive: true,
+      isAvailable: true
     });
 
     // Calculate distances and sort by proximity
     const deliveriesWithDistance = deliveries.map(delivery => {
       const [deliveryLon, deliveryLat] = delivery.currentLocation.coordinates;
       const distance = calculateDistance(orderLat, orderLon, deliveryLat, deliveryLon);
-      
+
       return {
         ...delivery.toObject(),
         distance: Math.round(distance * 100) / 100, // Round to 2 decimal places
@@ -341,10 +341,10 @@ router.post('/orders/:orderId/auto-assign-delivery', auth, async (req, res) => {
     const [orderLon, orderLat] = order.deliveryLocation.coordinates;
 
     // Find nearest available delivery agent
-    const deliveries = await Seller.find({ 
-      role: 'delivery', 
-      isActive: true, 
-      isAvailable: true 
+    const deliveries = await Seller.find({
+      role: 'delivery',
+      isActive: true,
+      isAvailable: true
     });
 
     let nearestDelivery = null;
@@ -353,7 +353,7 @@ router.post('/orders/:orderId/auto-assign-delivery', auth, async (req, res) => {
     for (const delivery of deliveries) {
       const [deliveryLon, deliveryLat] = delivery.currentLocation.coordinates;
       const distance = calculateDistance(orderLat, orderLon, deliveryLat, deliveryLon);
-      
+
       if (distance <= delivery.maxDeliveryRadius && distance < minDistance) {
         minDistance = distance;
         nearestDelivery = delivery;
@@ -369,9 +369,9 @@ router.post('/orders/:orderId/auto-assign-delivery', auth, async (req, res) => {
     order.deliveryStatus = 'assigned';
     order.status = 'confirmed'; // Auto-confirm order when delivery agent is assigned
     order.deliveryEvents = order.deliveryEvents || [];
-    order.deliveryEvents.push({ 
-      status: 'assigned', 
-      message: `Auto-assigned to ${nearestDelivery.name} (${minDistance.toFixed(2)} km away)` 
+    order.deliveryEvents.push({
+      status: 'assigned',
+      message: `Auto-assigned to ${nearestDelivery.name} (${minDistance.toFixed(2)} km away)`
     });
     await order.save();
 
@@ -404,11 +404,11 @@ router.post('/orders/:orderId/auto-assign-delivery', auth, async (req, res) => {
       console.error('Assignment email error:', e.message);
     }
 
-    res.json({ 
-      message: 'Order auto-assigned successfully', 
+    res.json({
+      message: 'Order auto-assigned successfully',
       delivery: nearestDelivery,
       distance: minDistance,
-      order 
+      order
     });
   } catch (error) {
     console.error('Error auto-assigning delivery:', error);
@@ -434,8 +434,8 @@ router.post('/orders/:orderId/assign-delivery', auth, async (req, res) => {
 
     // Calculate distance if both locations are available
     let distance = null;
-    if (order.deliveryLocation && order.deliveryLocation.coordinates && 
-        delivery.currentLocation && delivery.currentLocation.coordinates) {
+    if (order.deliveryLocation && order.deliveryLocation.coordinates &&
+      delivery.currentLocation && delivery.currentLocation.coordinates) {
       const [orderLon, orderLat] = order.deliveryLocation.coordinates;
       const [deliveryLon, deliveryLat] = delivery.currentLocation.coordinates;
       distance = calculateDistance(orderLat, orderLon, deliveryLat, deliveryLon);
@@ -445,9 +445,9 @@ router.post('/orders/:orderId/assign-delivery', auth, async (req, res) => {
     order.deliveryStatus = 'assigned';
     order.status = 'confirmed'; // Auto-confirm order when delivery agent is assigned
     order.deliveryEvents = order.deliveryEvents || [];
-    order.deliveryEvents.push({ 
-      status: 'assigned', 
-      message: `Assigned to ${delivery.name}${distance ? ` (${distance.toFixed(2)} km away)` : ''}` 
+    order.deliveryEvents.push({
+      status: 'assigned',
+      message: `Assigned to ${delivery.name}${distance ? ` (${distance.toFixed(2)} km away)` : ''}`
     });
     await order.save();
 
@@ -760,7 +760,7 @@ router.get('/stats', auth, async (req, res) => {
       Seller.countDocuments({ role: { $in: ['employee', 'manager', 'supervisor'] } }),
       Order.find({})
     ]);
-    
+
     const totalRevenue = orders.reduce((sum, ord) => sum + (Number(ord.totalAmount) || 0), 0);
     const ordersToday = orders.filter(o => {
       const d = new Date(o.orderDate || o.createdAt || 0);
@@ -768,12 +768,46 @@ router.get('/stats', auth, async (req, res) => {
       return d.toDateString() === today.toDateString();
     }).length;
 
+    // --- Analytics Data Generation ---
+    const last7Days = [...Array(7)].map((_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      return d.toISOString().split('T')[0];
+    }).reverse();
+
+    const revenueOverTime = last7Days.map(date => {
+      const dayOrders = orders.filter(o => (o.orderDate || o.createdAt || '').startsWith(date));
+      return {
+        date,
+        revenue: dayOrders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0)
+      };
+    });
+
+    const ordersOverTime = last7Days.map(date => {
+      const dayOrders = orders.filter(o => (o.orderDate || o.createdAt || '').startsWith(date));
+      return {
+        date,
+        orders: dayOrders.length
+      };
+    });
+
+    const statusCounts = orders.reduce((acc, o) => {
+      const status = o.status || 'pending';
+      acc[status] = (acc[status] || 0) + 1;
+      return acc;
+    }, {});
+
+    const orderStatusDist = Object.entries(statusCounts).map(([name, value]) => ({ name, value }));
+
     const stats = {
       totalUsers,
       totalSellers,
       totalEmployees,
       totalRevenue,
-      ordersToday
+      ordersToday,
+      revenueOverTime,
+      ordersOverTime,
+      orderStatusDist
     };
 
     res.json(stats);
@@ -795,7 +829,7 @@ router.get('/orders', auth, async (req, res) => {
       .populate('items.product', 'name')
       .populate('deliveryAssignee', 'name email')
       .sort({ orderDate: -1 });
-    
+
     console.log(`Admin orders fetch: Found ${orders.length} orders`);
     res.json(orders);
   } catch (error) {
@@ -843,7 +877,7 @@ router.patch('/orders/:orderId/status', auth, async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
     const { status } = req.body;
-    const validStatuses = ['pending','confirmed','processing','shipped','out_for_delivery','delivered','cancelled'];
+    const validStatuses = ['pending', 'confirmed', 'processing', 'shipped', 'out_for_delivery', 'delivered', 'cancelled'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ error: 'Invalid status' });
     }
@@ -1268,7 +1302,7 @@ router.put('/leaves/:id/status', auth, async (req, res) => {
     }
 
     const { status, adminComment } = req.body;
-    
+
     if (!['approved', 'rejected'].includes(status)) {
       return res.status(400).json({ error: 'Invalid status. Must be approved or rejected.' });
     }
@@ -1351,10 +1385,10 @@ router.put('/leaves/:id/status', auth, async (req, res) => {
                 <p><strong>⏰ Reviewed On:</strong> ${new Date().toLocaleDateString()}</p>
               </div>
               
-              ${status === 'approved' ? 
-                '<p style="color: #10B981; font-weight: bold;">✅ Your leave has been approved. Please plan accordingly and ensure proper handover of your responsibilities.</p>' :
-                '<p style="color: #EF4444; font-weight: bold;">❌ Your leave application has been rejected. Please contact your supervisor for more details.</p>'
-              }
+              ${status === 'approved' ?
+          '<p style="color: #10B981; font-weight: bold;">✅ Your leave has been approved. Please plan accordingly and ensure proper handover of your responsibilities.</p>' :
+          '<p style="color: #EF4444; font-weight: bold;">❌ Your leave application has been rejected. Please contact your supervisor for more details.</p>'
+        }
               
               <p>If you have any questions or need clarification, please contact the admin team or your supervisor.</p>
               
@@ -1386,9 +1420,9 @@ router.put('/leaves/:id/status', auth, async (req, res) => {
       // Don't fail the request if email fails, but log the error
     }
 
-    res.json({ 
+    res.json({
       message: `Leave application ${status} successfully. Email notification sent to ${leave.seller.email}.`,
-      leave 
+      leave
     });
   } catch (error) {
     console.error('Error updating leave status:', error);
@@ -1444,7 +1478,7 @@ router.put('/deliveries/:deliveryId/location', auth, async (req, res) => {
     }
 
     const { latitude, longitude, serviceAreas, maxDeliveryRadius, vehicleType, licenseNumber } = req.body;
-    
+
     const delivery = await Seller.findById(req.params.deliveryId);
     if (!delivery || delivery.role !== 'delivery') {
       return res.status(404).json({ error: 'Delivery agent not found' });
@@ -1475,8 +1509,8 @@ router.put('/deliveries/:deliveryId/location', auth, async (req, res) => {
 
     await delivery.save();
 
-    res.json({ 
-      message: 'Delivery agent location updated successfully', 
+    res.json({
+      message: 'Delivery agent location updated successfully',
       delivery: {
         id: delivery._id,
         name: delivery.name,

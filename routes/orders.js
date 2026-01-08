@@ -1,8 +1,17 @@
 const express = require('express');
 const Order = require('../models/Order');
+const User = require('../models/User'); // Import User model to update address
 const Product = require('../models/Product');
 const auth = require('../middleware/auth');
 const router = express.Router();
+
+const Razorpay = require('razorpay');
+
+// Initialize Razorpay
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_dummy',
+  key_secret: process.env.RAZORPAY_KEY_SECRET || 'dummy_secret'
+});
 
 router.post('/', auth, async (req, res) => {
   try {
@@ -25,7 +34,7 @@ router.post('/', auth, async (req, res) => {
       // Handle both formats: {product, quantity} and {product: {_id, price, ...}, quantity}
       const productId = item.product && typeof item.product === 'object' ? item.product._id : item.product;
       const product = await Product.findById(productId);
-      
+
       if (!product) {
         return res.status(400).json({ error: `Product ${productId} not found` });
       }
@@ -43,7 +52,9 @@ router.post('/', auth, async (req, res) => {
         price: product.price
       });
 
-      // Update product stock
+      // Update product stock (only deduct for COD or if payment is confirmed - strict way)
+      // For now, deducting stock on order creation to reserve items
+      // Ideally, for online payments, we should reserve and only deduct strictly on payment success hook
       product.inStock -= item.quantity;
       await product.save();
     }
@@ -57,27 +68,88 @@ router.post('/', auth, async (req, res) => {
       return res.status(400).json({ error: `Total amount mismatch. Calculated: ₹${finalTotal.toFixed(2)}, Provided: ₹${providedTotal.toFixed(2)}` });
     }
 
+    let razorpayOrderId = null;
+    let razorpayKey = null;
+
+    if (paymentMethod === 'online' || paymentMethod === 'razorpay') {
+      try {
+        const isDummyKey = process.env.RAZORPAY_KEY_ID && (
+          process.env.RAZORPAY_KEY_ID.includes('dummy') ||
+          process.env.RAZORPAY_KEY_ID.includes('test_dummy')
+        );
+
+        if (isDummyKey) {
+          // Mock Response for Testing
+          console.log("Mocking Razorpay Order for Dummy Keys");
+          razorpayOrderId = `order_mock_${Date.now()}`;
+          razorpayKey = process.env.RAZORPAY_KEY_ID;
+        } else {
+          const options = {
+            amount: Math.round(finalTotal * 100), // amount in paisa
+            currency: "INR",
+            receipt: `receipt_${Date.now()}`
+          };
+          const orderResponse = await razorpay.orders.create(options);
+          razorpayOrderId = orderResponse.id;
+          razorpayKey = process.env.RAZORPAY_KEY_ID;
+        }
+      } catch (rzpError) {
+        console.error("Razorpay Order Creation Failed:", rzpError);
+        // If dummy keys are used or network fails, we'll return a specific error
+        return res.status(500).json({
+          error: 'Payment Gateway Error',
+          details: 'Failed to initiate payment. Please verify backend Razorpay keys or try COD.'
+        });
+      }
+    }
+
     const order = new Order({
       user: req.user.id,
       items: orderItems,
       totalAmount: providedTotal || finalTotal,
       shippingAddress,
-      paymentMethod: paymentMethod || 'cod',
-      paymentStatus: paymentMethod === 'online' ? 'paid' : 'pending',
+      paymentMethod: (paymentMethod === 'mock_online') ? 'online' : (paymentMethod || 'cod'),
+      paymentStatus: (paymentMethod === 'mock_online') ? 'paid' : ((paymentMethod === 'online' || paymentMethod === 'razorpay') ? 'pending' : 'pending'),
       notes: notes || '',
       orderDate: new Date(),
-      status: 'pending'
+      status: (paymentMethod === 'mock_online') ? 'confirmed' : 'pending',
+      razorpayOrderId: razorpayOrderId
     });
+
+    // Update user's default address with the new one used in this order
+    if (req.user && req.user.id) {
+      try {
+        await User.findByIdAndUpdate(req.user.id, {
+          $set: {
+            address: shippingAddress.address,
+            city: shippingAddress.city,
+            state: shippingAddress.state,
+            pincode: shippingAddress.pincode,
+            country: shippingAddress.country || 'India'
+          }
+        });
+        // Only update phone if not already present or if user wants it (simplified here for "last used")
+        if (shippingAddress.phone && shippingAddress.phone !== req.user.phone) {
+          await User.findByIdAndUpdate(req.user.id, { $set: { phone: shippingAddress.phone } });
+        }
+      } catch (userUpdateError) {
+        console.error('Failed to update user address profile:', userUpdateError);
+      }
+    }
 
     await order.save();
     await order.populate('items.product', 'name image category');
     await order.populate('user', 'name email phone');
 
-    // Return the order ID for frontend navigation
+    // Return the response
     res.status(201).json({
       success: true,
       message: 'Order created successfully',
       orderId: order._id,
+      razorpayOrderId: razorpayOrderId,
+      razorpayKey: razorpayKey,
+      amount: Math.round(finalTotal * 100), // Amount in paisa for frontend
+      currency: "INR",
       order: order.toObject()
     });
   } catch (error) {

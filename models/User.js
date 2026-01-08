@@ -14,7 +14,12 @@ const userSchema = new mongoose.Schema({
   department: { type: String, default: '' },
   isActive: { type: Boolean, default: true },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  createdAt: { type: Date, default: Date.now }
+  createdAt: { type: Date, default: Date.now },
+  address: { type: String, default: '' },
+  city: { type: String, default: '' },
+  state: { type: String, default: '' },
+  pincode: { type: String, default: '' },
+  country: { type: String, default: 'India' }
 });
 
 module.exports = mongoose.model('User', userSchema); 

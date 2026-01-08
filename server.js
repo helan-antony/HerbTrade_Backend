@@ -13,7 +13,7 @@ const commentRoutes = require('./routes/comments');
 const discussionRoutes = require('./routes/discussions');
 const hospitalRoutes = require('./routes/hospitals');
 const appointmentRoutes = require('./routes/appointments');
-const chatbotRoutes = require('./routes/chatbot');
+// const chatbotRoutes = require('./routes/chatbot');
 const wishlistRoutes = require('./routes/wishlist');
 const cartRoutes = require('./routes/cart');
 const hospitalBookingRoutes = require('./routes/hospitalBookings');
@@ -47,11 +47,11 @@ const connectDB = async () => {
   try {
     console.log('🔍 Attempting to connect to MongoDB...');
     console.log('🔗 MONGODB_URI:', process.env.MONGODB_URI ? 'URI is set' : 'URI is undefined');
-    
+
     if (!process.env.MONGODB_URI) {
       throw new Error('MONGODB_URI is not defined in environment variables');
     }
-    
+
     const conn = await mongoose.connect(process.env.MONGODB_URI, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
@@ -60,8 +60,7 @@ const connectDB = async () => {
     console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
     console.log(`📊 Database: ${conn.connection.name}`);
     console.log(
-      `🔗 Connection State: ${
-        conn.connection.readyState === 1 ? "Connected" : "Disconnected"
+      `🔗 Connection State: ${conn.connection.readyState === 1 ? "Connected" : "Disconnected"
       }`
     );
 
@@ -84,6 +83,10 @@ connectDB();
 
 // Routes - Enable essential routes
 console.log('Registering routes...');
+
+// ML Service Routes
+const mlRoutes = require('./routes/ml');
+app.use('/api/ml', mlRoutes);
 
 // PRIORITY: Simple working API endpoints to fix 404 errors - MUST BE FIRST
 app.get('/api/blog/:id/stats', (req, res) => {
@@ -131,8 +134,8 @@ console.log('✅ Seller routes registered');
 // Health check and test routes
 app.get('/api/health', (req, res) => {
   console.log('🏥 Health check route hit!');
-  res.json({ 
-    status: 'OK', 
+  res.json({
+    status: 'OK',
     message: 'HerbTrade Backend is running!',
     timestamp: new Date().toISOString(),
     cors: 'Updated for network access'
@@ -324,8 +327,8 @@ app.get('/api/comments/blog/:blogId', async (req, res) => {
       blog: req.params.blogId,
       parentComment: null
     })
-    .populate('user', 'name')
-    .sort({ createdAt: -1 });
+      .populate('user', 'name')
+      .sort({ createdAt: -1 });
 
     console.log('Found comments:', comments.length);
 
@@ -488,7 +491,7 @@ app.get('/api/debug/bookings', async (req, res) => {
 async function ensureAdminUser() {
   const adminEmail = 'admin@gmail.com';
   const adminPassword = 'admin@123';
-  
+
   try {
     const existing = await User.findOne({ email: adminEmail, role: 'admin' });
     if (!existing) {
