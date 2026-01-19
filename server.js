@@ -18,6 +18,8 @@ const wishlistRoutes = require('./routes/wishlist');
 const cartRoutes = require('./routes/cart');
 const hospitalBookingRoutes = require('./routes/hospitalBookings');
 const googlePlacesRoutes = require('./routes/googlePlaces');
+const newsletterRoutes = require('./routes/newsletters');
+const wellnessCoachRoutes = require('./routes/wellnessCoaches');
 const User = require('./models/User');
 const bcrypt = require('bcryptjs');
 
@@ -393,6 +395,13 @@ app.get('/api/discussions', async (req, res) => {
 
 app.use('/api/discussions', discussionRoutes);
 console.log('✅ Discussions routes registered');
+
+app.use('/api/newsletters', newsletterRoutes);
+console.log('✅ Newsletter routes registered');
+
+app.use('/api/wellness-coaches', wellnessCoachRoutes);
+console.log('✅ Wellness Coach routes registered');
+
 // app.use('/api/chatbot', chatbotRoutes);
 
 // Health check route - also serves hospitals data
@@ -515,9 +524,66 @@ async function ensureAdminUser() {
   }
 }
 
-// Initialize admin user after DB connection
+// Create inbuilt admin user if not exists
+async function ensureAdminUser() {
+  const adminEmail = 'admin@gmail.com';
+  const adminPassword = 'admin@123';
+
+  try {
+    const existing = await User.findOne({ email: adminEmail, role: 'admin' });
+    if (!existing) {
+      const hash = await bcrypt.hash(adminPassword, 10);
+      const admin = await User.create({
+        name: 'System Administrator',
+        email: adminEmail,
+        phone: '0000000000',
+        password: hash,
+        role: 'admin',
+        isActive: true
+      });
+      console.log('👤 Admin user created successfully');
+      console.log(`📧 Email: ${adminEmail}`);
+      console.log(`🔑 Password: ${adminPassword}`);
+    } else {
+      console.log('👤 Admin user already exists');
+    }
+  } catch (error) {
+    console.error('❌ Error creating admin user:', error);
+  }
+}
+
+// Create inbuilt wellness coach user if not exists
+async function ensureWellnessCoachUser() {
+  const coachEmail = 'coach@gmail.com';
+  const coachPassword = 'coach@123';
+
+  try {
+    const existing = await User.findOne({ email: coachEmail, role: 'wellness_coach' });
+    if (!existing) {
+      const hash = await bcrypt.hash(coachPassword, 10);
+      const coach = await User.create({
+        name: 'Dr. Wellness Expert',
+        email: coachEmail,
+        phone: '1111111111',
+        password: hash,
+        role: 'wellness_coach',
+        isActive: true
+      });
+      console.log('👤 Wellness Coach user created successfully');
+      console.log(`📧 Email: ${coachEmail}`);
+      console.log(`🔑 Password: ${coachPassword}`);
+    } else {
+      console.log('👤 Wellness Coach user already exists');
+    }
+  } catch (error) {
+    console.error('❌ Error creating wellness coach user:', error);
+  }
+}
+
+// Initialize admin and coach users after DB connection
 mongoose.connection.once('open', () => {
   ensureAdminUser();
+  ensureWellnessCoachUser();
 });
 
 // Removed duplicate routes - now handled at the top
