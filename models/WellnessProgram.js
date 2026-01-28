@@ -6,10 +6,49 @@ const wellnessProgramSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
+  title: {
+    type: String,
+    trim: true
+  },
   description: {
     type: String,
     required: true
   },
+  category: {
+    type: String,
+    enum: ['stress-management', 'sleep-hygiene', 'weight-loss', 'fitness', 'nutrition', 'mindfulness', 'detox', 'general-wellness'],
+    required: false
+  },
+  duration: {
+    type: Number,
+    required: false
+  },
+  difficulty: {
+    type: String,
+    enum: ['beginner', 'intermediate', 'advanced'],
+    required: false
+  },
+  targetAudience: [{
+    type: String,
+    trim: true
+  }],
+  creator: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: false
+  },
+  prerequisites: [{
+    type: String,
+    trim: true
+  }],
+  benefits: [{
+    type: String,
+    trim: true
+  }],
+  enrolledUsers: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
   coachId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'WellnessCoach',
@@ -18,7 +57,7 @@ const wellnessProgramSchema = new mongoose.Schema({
   clientId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: false
   },
   startDate: {
     type: Date,
@@ -122,7 +161,7 @@ const wellnessProgramSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['active', 'completed', 'cancelled'],
+    enum: ['active', 'completed', 'cancelled', 'draft', 'published', 'archived'],
     default: 'active'
   },
   createdAt: {

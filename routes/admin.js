@@ -624,7 +624,8 @@ router.put('/employees/:employeeId/disable', auth, async (req, res) => {
 });
 router.get('/users', auth, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
+    // Allow admin and wellness_coach roles to access users
+    if (req.user.role !== 'admin' && req.user.role !== 'wellness_coach') {
       return res.status(403).json({ error: 'Access denied' });
     }
 
