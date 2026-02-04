@@ -5,28 +5,38 @@ const User = require('../models/User');
 const nodemailer = require('nodemailer');
 const auth = require('../middleware/auth');
 
-// Create a new newsletter (admin only)
+// Create a new newsletter (admin and wellness coaches)
 router.post('/', auth, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Access denied. Admin privileges required.' });
+    // Allow admin and wellness coaches to create newsletters
+    if (req.user.role !== 'admin' && req.user.role !== 'wellness_coach') {
+      return res.status(403).json({ error: 'Access denied. Admin or wellness coach privileges required.' });
     }
 
-    const { title, content, category, tags } = req.body;
+    const { title, content, category, tags, author, isActive } = req.body;
+
+    console.log('Newsletter creation request:', req.body);
+    console.log('User role:', req.user.role);
+    console.log('User name:', req.user.name);
 
     const newsletter = new Newsletter({
       title,
       content,
-      category,
-      tags: tags || [],
-      author: req.user.name
+      category: category || 'general',
+      tags: Array.isArray(tags) ? tags : (tags || '').split(',').map(tag => tag.trim()).filter(tag => tag),
+      author: author || req.user.name || 'Wellness Coach',
+      isActive: isActive !== undefined ? isActive : true,
+      programType: 'newsletter',  // Explicitly set as newsletter
+      programCoachId: req.user.id  // Associate with the coach who created it
     });
 
     await newsletter.save();
+    console.log('Newsletter created successfully:', newsletter._id);
+    
     res.status(201).json({ message: 'Newsletter created successfully', newsletter });
   } catch (error) {
     console.error('Error creating newsletter:', error);
-    res.status(500).json({ error: 'Failed to create newsletter' });
+    res.status(500).json({ error: 'Failed to create newsletter', message: error.message });
   }
 });
 

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const WellnessCoach = require('../models/WellnessCoach');
-const WellnessProgram = require('../models/WellnessProgram');
+const Newsletter = require('../models/Newsletter');
 const User = require('../models/User');
 const auth = require('../middleware/auth');
 
@@ -64,7 +64,7 @@ router.get('/profile', auth, async (req, res) => {
         languages: [],
         availability: {},
         clients: [],
-        wellnessPrograms: [],
+        newsletterPrograms: [],
         createdAt: new Date(),
         updatedAt: new Date()
       });
@@ -186,10 +186,11 @@ router.put('/clients/:clientId/status', auth, async (req, res) => {
 // Get current wellness program for a client
 router.get('/programs/current', auth, async (req, res) => {
   try {
-    const program = await WellnessProgram.findOne({
-      clientId: req.user.id,
-      status: 'active'
-    }).populate('coachId', 'userId qualifications specializations');
+    const program = await Newsletter.findOne({
+      programAssignedUserId: req.user.id,
+      programType: 'wellness_program',
+      programStatus: 'active'
+    }).populate('programCoachId', 'name email qualifications specializations');
 
     if (!program) {
       return res.status(404).json({ message: 'No active program found' });
@@ -210,8 +211,10 @@ router.get('/programs', auth, async (req, res) => {
       return res.json({ programs: [] });
     }
 
-    const programs = await WellnessProgram.find({ coachId: coach._id })
-      .populate('clientId', 'name email profilePic');
+    const programs = await Newsletter.find({ 
+      programCoachId: req.user.id,
+      programType: 'wellness_program' 
+    }).populate('programAssignedUserId', 'name email profilePic');
 
     res.json({ programs });
   } catch (error) {
@@ -229,18 +232,21 @@ router.get('/programs/available', auth, async (req, res) => {
     }
 
     // Get all published wellness programs
-    const programs = await WellnessProgram.find({ status: 'active' })
-      .populate('coachId', 'userId qualifications specializations')
-      .populate('clientId', 'name email profilePic')
-      .sort({ createdAt: -1 });
+    const programs = await Newsletter.find({ 
+      programType: 'wellness_program',
+      programStatus: { $in: ['active', 'published'] } 
+    })
+      .populate('programCoachId', 'name email qualifications specializations')
+      .populate('programAssignedUserId', 'name email profilePic')
+      .sort({ publishedDate: -1 });
 
     // Separate assigned and unassigned programs
     const assignedPrograms = programs.filter(program => 
-      program.clientId && program.clientId._id.toString() === req.user.id
+      program.programAssignedUserId && program.programAssignedUserId._id.toString() === req.user.id
     );
     
     const unassignedPrograms = programs.filter(program => 
-      !program.clientId
+      !program.programAssignedUserId
     );
 
     res.json({ 
@@ -257,6 +263,10 @@ router.get('/programs/available', auth, async (req, res) => {
 // Create wellness program (admin/coach only)
 router.post('/programs', auth, async (req, res) => {
   try {
+    console.log('Program creation request received');
+    console.log('Request body:', req.body);
+    console.log('User ID:', req.user.id);
+    
     const {
       name,
       title,
@@ -268,56 +278,60 @@ router.post('/programs', auth, async (req, res) => {
       prerequisites,
       benefits,
       status,
-      clientId,
+      assignedUserId,
       startDate,
       endDate,
       goals,
       dailyTasks,
-      weeklyMilestones,
-      recommendations
+      weeklyMilestones
     } = req.body;
 
     // Check if user is coach or admin
     const user = await User.findById(req.user.id);
+    console.log('User role:', user.role);
     if (user.role !== 'wellness_coach' && user.role !== 'admin') {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-
     // Find the coach profile associated with the user
     const coach = await WellnessCoach.findOne({ userId: req.user.id });
+    console.log('Coach found:', coach ? 'Yes' : 'No');
     if (!coach) {
       return res.status(404).json({ message: 'Coach profile not found. Please complete your profile first.' });
     }
 
-    const program = new WellnessProgram({
-      name: name || title,
-      title,
-      description,
-      category,
-      duration,
-      difficulty,
-      targetAudience: targetAudience || [],
-      prerequisites: prerequisites || [],
-      benefits: benefits || [],
-      status: status || 'active',
-      coachId: coach._id, // Use coach._id, not req.user.id
-      clientId: clientId || null, // Make clientId optional
-      startDate,
-      endDate,
-      goals: goals || [],
-      dailyTasks: dailyTasks || [],
-      weeklyMilestones: weeklyMilestones || [],
-      recommendations: recommendations || []
+    const program = new Newsletter({
+      title: title || name,
+      content: description,
+      category: 'wellness_program',
+      author: user.name,
+      programType: 'wellness_program',
+      programName: name || title,
+      programDescription: description,
+      programCategory: category,
+      programDuration: duration,
+      programDifficulty: difficulty,
+      programStartDate: startDate,
+      programEndDate: endDate,
+      programGoals: goals || [],
+      programTargetAudience: targetAudience || [],
+      programPrerequisites: prerequisites || [],
+      programBenefits: benefits || [],
+      programDailyTasks: dailyTasks || [],
+      programWeeklyMilestones: weeklyMilestones || [],
+      programStatus: status || 'draft',
+      programAssignedUserId: assignedUserId || null,
+      programCoachId: req.user.id
     });
 
+    console.log('Saving program to database...');
     await program.save();
-
+    console.log('Program saved successfully:', program._id);
 
     // Add program to coach's programs
     await WellnessCoach.findByIdAndUpdate(
       coach._id,
-      { $push: { wellnessPrograms: program._id } }
+      { $push: { newsletterPrograms: program._id } }
     );
 
     res.status(201).json({ message: 'Program created successfully', program });
@@ -357,23 +371,19 @@ router.put('/programs/:programId/tasks/:taskId/toggle', auth, async (req, res) =
     const { programId, taskId } = req.params;
 
     // Find the program
-    const program = await WellnessProgram.findById(programId);
+    const program = await Newsletter.findById(programId);
     if (!program) {
       return res.status(404).json({ message: 'Program not found' });
     }
 
-    // Check authorization (must be the client or the coach)
-    if (program.clientId.toString() !== req.user.id && program.coachId.toString() !== req.user.id) {
-      // Also check if the user is the coach (since coachId in program refers to the WellnessCoach document, not the User)
-      // We need to fetch the WellnessCoach document for the logged in user to check if they are the coach
-      const coach = await WellnessCoach.findOne({ userId: req.user.id });
-      if (!coach || coach._id.toString() !== program.coachId.toString()) {
-        return res.status(403).json({ message: 'Access denied' });
-      }
+    // Check authorization (must be the assigned user or the coach)
+    if (program.programAssignedUserId && program.programAssignedUserId.toString() !== req.user.id && 
+        program.programCoachId.toString() !== req.user.id) {
+      return res.status(403).json({ message: 'Access denied' });
     }
 
     // Find the task
-    const task = program.dailyTasks.find(t => t.id === taskId);
+    const task = program.programDailyTasks.find(t => t.id === taskId);
     if (!task) {
       return res.status(404).json({ message: 'Task not found' });
     }
@@ -382,11 +392,11 @@ router.put('/programs/:programId/tasks/:taskId/toggle', auth, async (req, res) =
     task.completed = !task.completed;
 
     // Recalculate progress
-    const totalTasks = program.dailyTasks.length;
-    const completedTasks = program.dailyTasks.filter(t => t.completed).length;
+    const totalTasks = program.programDailyTasks.length;
+    const completedTasks = program.programDailyTasks.filter(t => t.completed).length;
 
-    const totalMilestones = program.weeklyMilestones.length;
-    const completedMilestones = program.weeklyMilestones.filter(m => m.achieved).length;
+    const totalMilestones = program.programWeeklyMilestones.length;
+    const completedMilestones = program.programWeeklyMilestones.filter(m => m.achieved).length;
 
     // Avoid division by zero
     const taskProgress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
@@ -396,6 +406,7 @@ router.put('/programs/:programId/tasks/:taskId/toggle', auth, async (req, res) =
     const totalCompleted = completedTasks + completedMilestones;
     const overallProgress = totalItems > 0 ? Math.round((totalCompleted / totalItems) * 100) : 0;
 
+    // Update progress in the program
     program.progress = {
       overall: overallProgress,
       dailyGoals: taskProgress,
@@ -407,6 +418,265 @@ router.put('/programs/:programId/tasks/:taskId/toggle', auth, async (req, res) =
     res.json(program);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// Add post-enrollment data to newsletter
+router.post('/newsletters/:newsletterId/post-enrollment', auth, async (req, res) => {
+  try {
+    console.log('Post-enrollment data request received');
+    console.log('Newsletter ID:', req.params.newsletterId);
+    console.log('Request body:', req.body);
+    
+    // Check if user is a wellness coach
+    const user = await User.findById(req.user.id);
+    if (user.role !== 'wellness_coach') {
+      return res.status(403).json({ error: 'Access denied. Wellness coaches only.' });
+    }
+
+    const { type, title, content, url, duration, difficulty, tags } = req.body;
+
+    // Validate required fields
+    if (!type || !title || !content) {
+      return res.status(400).json({ error: 'Type, title, and content are required' });
+    }
+
+    // Find the newsletter and verify coach ownership
+    const newsletter = await Newsletter.findById(req.params.newsletterId);
+    if (!newsletter) {
+      return res.status(404).json({ error: 'Newsletter not found' });
+    }
+
+    // Check if coach owns this newsletter
+    if (newsletter.programCoachId && newsletter.programCoachId.toString() !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied. You do not own this newsletter.' });
+    }
+
+    // Add post-enrollment data
+    const postData = {
+      type,
+      title,
+      content,
+      url: url || '',
+      duration: duration || '',
+      difficulty: difficulty || 'beginner',
+      tags: Array.isArray(tags) ? tags : (tags || '').split(',').map(tag => tag.trim()).filter(tag => tag),
+      createdAt: new Date()
+    };
+
+    newsletter.postEnrollmentData.push(postData);
+    await newsletter.save();
+
+    console.log('Post-enrollment data added successfully');
+    res.status(201).json({ 
+      message: 'Post-enrollment data added successfully', 
+      postData: postData,
+      totalItems: newsletter.postEnrollmentData.length 
+    });
+  } catch (error) {
+    console.error('Error adding post-enrollment data:', error);
+    res.status(500).json({ error: 'Server error', message: error.message });
+  }
+});
+
+// Get post-enrollment data for a newsletter
+router.get('/newsletters/:newsletterId/post-enrollment', auth, async (req, res) => {
+  try {
+    const newsletter = await Newsletter.findById(req.params.newsletterId);
+    if (!newsletter) {
+      return res.status(404).json({ error: 'Newsletter not found' });
+    }
+
+    // Check authorization
+    const user = await User.findById(req.user.id);
+    if (user.role !== 'wellness_coach' && user.role !== 'admin') {
+      // Regular users can only see their own enrolled content
+      const enrollment = newsletter.enrolledUsers.find(e => e.userId.toString() === req.user.id);
+      if (!enrollment) {
+        return res.status(403).json({ error: 'Access denied. Not enrolled in this newsletter.' });
+      }
+    }
+
+    res.json({
+      postEnrollmentData: newsletter.postEnrollmentData || [],
+      enrolledUsersCount: newsletter.enrolledUsers ? newsletter.enrolledUsers.length : 0
+    });
+  } catch (error) {
+    console.error('Error fetching post-enrollment data:', error);
+    res.status(500).json({ error: 'Server error', message: error.message });
+  }
+});
+
+// Enroll user in newsletter
+router.post('/newsletters/:newsletterId/enroll', auth, async (req, res) => {
+  try {
+    const newsletter = await Newsletter.findById(req.params.newsletterId);
+    if (!newsletter) {
+      return res.status(404).json({ error: 'Newsletter not found' });
+    }
+
+    // Check if already enrolled
+    const existingEnrollment = newsletter.enrolledUsers.find(e => e.userId.toString() === req.user.id);
+    if (existingEnrollment) {
+      return res.status(409).json({ error: 'Already enrolled in this newsletter' });
+    }
+
+    // Add enrollment
+    newsletter.enrolledUsers.push({
+      userId: req.user.id,
+      enrolledAt: new Date(),
+      progress: 0
+    });
+
+    await newsletter.save();
+
+    res.status(201).json({ 
+      message: 'Successfully enrolled in newsletter',
+      postEnrollmentData: newsletter.postEnrollmentData || [],
+      newsletter: newsletter
+    });
+  } catch (error) {
+    console.error('Error enrolling in newsletter:', error);
+    res.status(500).json({ error: 'Server error', message: error.message });
+  }
+});
+
+// Get enrolled newsletters for a user
+router.get('/my-enrollments', auth, async (req, res) => {
+  try {
+    // Find all newsletters where the user is enrolled
+    const enrolledNewsletters = await Newsletter.find({
+      'enrolledUsers.userId': req.user.id
+    }).populate('programCoachId', 'name email');
+
+    res.json({
+      enrolledNewsletters,
+      count: enrolledNewsletters.length
+    });
+  } catch (error) {
+    console.error('Error fetching enrolled newsletters:', error);
+    res.status(500).json({ error: 'Server error', message: error.message });
+  }
+});
+
+// Get a specific enrolled newsletter with its post-enrollment content
+router.get('/enrolled-newsletters/:newsletterId', auth, async (req, res) => {
+  try {
+    const newsletter = await Newsletter.findOne({
+      _id: req.params.newsletterId,
+      'enrolledUsers.userId': req.user.id
+    });
+    
+    if (!newsletter) {
+      return res.status(404).json({ error: 'Not enrolled in this newsletter or newsletter not found' });
+    }
+
+    res.json({
+      newsletter,
+      postEnrollmentData: newsletter.postEnrollmentData || []
+    });
+  } catch (error) {
+    console.error('Error fetching enrolled newsletter:', error);
+    res.status(500).json({ error: 'Server error', message: error.message });
+  }
+});
+
+// Save user progress for enrolled content
+router.post('/newsletters/:newsletterId/save-progress', auth, async (req, res) => {
+  try {
+    const { contentId, progress, completed, viewedAt } = req.body;
+    
+    // Find newsletter by ID (regardless of enrollment status for now)
+    const newsletter = await Newsletter.findById(req.params.newsletterId);
+    
+    if (!newsletter) {
+      return res.status(404).json({ error: 'Newsletter not found' });
+    }
+    
+    // Check if user is enrolled, and if not, enroll them first
+    let enrollment = newsletter.enrolledUsers.find(e => e.userId.toString() === req.user.id);
+    if (!enrollment) {
+      newsletter.enrolledUsers.push({
+        userId: req.user.id,
+        enrolledAt: new Date(),
+        progress: 0
+      });
+      await newsletter.save();
+      console.log('User automatically enrolled in newsletter for progress tracking');
+    }
+    
+    // Find or create user progress record
+    let userProgress = newsletter.userProgress?.find(p => p.userId.toString() === req.user.id);
+    
+    if (!userProgress) {
+      userProgress = {
+        userId: req.user.id,
+        contentProgress: [],
+        overallProgress: 0,
+        lastAccessed: new Date()
+      };
+      if (!newsletter.userProgress) newsletter.userProgress = [];
+      newsletter.userProgress.push(userProgress);
+    }
+    
+    // Update or create content progress
+    const contentIndex = userProgress.contentProgress.findIndex(cp => cp.contentId === contentId);
+    
+    const contentProgress = {
+      contentId,
+      progress: progress || 0,
+      completed: completed || false,
+      viewedAt: viewedAt || new Date(),
+      lastUpdated: new Date()
+    };
+    
+    if (contentIndex >= 0) {
+      userProgress.contentProgress[contentIndex] = contentProgress;
+    } else {
+      userProgress.contentProgress.push(contentProgress);
+    }
+    
+    // Calculate overall progress
+    const totalItems = newsletter.postEnrollmentData.length;
+    const completedItems = userProgress.contentProgress.filter(cp => cp.completed).length;
+    userProgress.overallProgress = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
+    userProgress.lastAccessed = new Date();
+    
+    await newsletter.save();
+    
+    res.json({ 
+      message: 'Progress saved successfully',
+      progress: userProgress.overallProgress,
+      contentProgress
+    });
+  } catch (error) {
+    console.error('Error saving progress:', error);
+    res.status(500).json({ error: 'Server error', message: error.message });
+  }
+});
+
+// Get user progress for a newsletter
+router.get('/newsletters/:newsletterId/progress', auth, async (req, res) => {
+  try {
+    const newsletter = await Newsletter.findOne({
+      _id: req.params.newsletterId,
+      'enrolledUsers.userId': req.user.id
+    });
+    
+    if (!newsletter) {
+      return res.status(404).json({ error: 'Not enrolled in this newsletter' });
+    }
+    
+    const userProgress = newsletter.userProgress?.find(p => p.userId.toString() === req.user.id);
+    
+    res.json({
+      overallProgress: userProgress?.overallProgress || 0,
+      contentProgress: userProgress?.contentProgress || [],
+      totalContentItems: newsletter.postEnrollmentData.length
+    });
+  } catch (error) {
+    console.error('Error fetching progress:', error);
+    res.status(500).json({ error: 'Server error', message: error.message });
   }
 });
 

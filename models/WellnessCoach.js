@@ -103,9 +103,9 @@ const wellnessCoachSchema = new mongoose.Schema({
       default: 'active'
     }
   }],
-  wellnessPrograms: [{
+  newsletterPrograms: [{
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'WellnessProgram'
+    ref: 'Newsletter'
   }],
   createdAt: {
     type: Date,
