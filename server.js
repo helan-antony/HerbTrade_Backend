@@ -27,14 +27,36 @@ dotenv.config({ path: __dirname + '/.env' });
 
 const app = express();
 
-// Middleware - Permissive CORS for development (temporary fix)
-app.use(cors({
-  origin: true,  // Allow all origins during development
+// Middleware - CORS configuration with environment support
+const corsOptions = {
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
   optionsSuccessStatus: 200 // For legacy browser support
-}));
+};
+
+// Set origin based on environment
+if (process.env.NODE_ENV === 'production') {
+  // Use the FRONTEND_URL from environment variables if available, otherwise default
+  const frontendUrl = process.env.FRONTEND_URL || 'https://herb-trade-frontend.vercel.app';
+  const wwwFrontendUrl = frontendUrl.startsWith('https://') ? 
+    frontendUrl.replace('https://', 'https://www.') : 
+    frontendUrl.replace('http://', 'http://www.');
+  
+  corsOptions.origin = [
+    frontendUrl,
+    wwwFrontendUrl,
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'http://localhost:5174',
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:3000'
+  ];
+} else {
+  corsOptions.origin = true;  // Allow all origins during development
+}
+
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 

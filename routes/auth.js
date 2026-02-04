@@ -176,9 +176,17 @@ router.post('/google-login', async (req, res) => {
 
   } catch (err) {
     console.error('❌ Google login error:', err);
+    // Provide more specific error messages for common issues
+    if (err.code === 11000) {
+      return res.status(400).json({ 
+        error: 'A user with this email already exists with different credentials',
+        hint: 'Try logging in with your original method or contact support'
+      });
+    }
     res.status(500).json({ 
       error: 'Google authentication failed', 
-      details: err.message 
+      details: err.message,
+      hint: 'Please ensure the app is properly configured for Google authentication'
     });
   }
 });
