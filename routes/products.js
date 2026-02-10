@@ -91,6 +91,16 @@ router.post('/', auth, async (req, res) => {
       return res.status(400).json({ error: 'All required fields must be provided' });
     }
 
+    // Check if a product with the same name already exists for this seller
+    const existingProduct = await Product.findOne({
+      name: { $regex: `^${name.trim()}$`, $options: 'i' }, // Case-insensitive exact match after trimming
+      seller: req.user.id
+    });
+
+    if (existingProduct) {
+      return res.status(409).json({ error: 'A product with this name already exists for your account' });
+    }
+
     const productData = {
       name,
       description,
