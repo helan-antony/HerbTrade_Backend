@@ -39,10 +39,10 @@ const corsOptions = {
 if (process.env.NODE_ENV === 'production') {
   // Use the FRONTEND_URL from environment variables if available, otherwise default
   const frontendUrl = process.env.FRONTEND_URL || 'https://herb-trade-frontend.vercel.app';
-  const wwwFrontendUrl = frontendUrl.startsWith('https://') ? 
-    frontendUrl.replace('https://', 'https://www.') : 
+  const wwwFrontendUrl = frontendUrl.startsWith('https://') ?
+    frontendUrl.replace('https://', 'https://www.') :
     frontendUrl.replace('http://', 'http://www.');
-  
+
   corsOptions.origin = [
     frontendUrl,
     wwwFrontendUrl,
@@ -578,7 +578,7 @@ async function ensureAdminUser() {
 // Create inbuilt wellness coach user if not exists
 async function ensureWellnessCoachUser() {
   const coachEmail = 'coach@gmail.com';
-  const coachPassword = 'coach@123';
+  const coachPassword = 'Coach@222003';
 
   try {
     const existing = await User.findOne({ email: coachEmail, role: 'wellness_coach' });
